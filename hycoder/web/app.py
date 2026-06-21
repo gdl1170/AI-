@@ -3820,7 +3820,7 @@ Formatta la risposta in Markdown con sezioni chiare.
             if r.returncode != 0 and "rejected" in (r.stderr or ""):
                 log_msg("⚠ Push rifiutato — remote ha commit non presenti in locale, tento force push...")
                 r = subprocess.run(
-                    ["git", "-C", str(p), "push", "--force-with-lease", "-u", push_url, branch],
+                    ["git", "-C", str(p), "push", "--force", "-u", push_url, branch],
                     capture_output=True, text=True, timeout=120,
                     env=git_env,
                 )
