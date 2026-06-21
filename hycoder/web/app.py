@@ -3779,17 +3779,16 @@ Formatta la risposta in Markdown con sezioni chiare.
             subprocess.run(["git", "-C", str(p), "add", "-A", "--force"],
                            capture_output=True, timeout=30, check=True)
 
-            # 5. Check if there's something to commit
-            r = subprocess.run(["git", "-C", str(p), "status", "--porcelain"],
-                               capture_output=True, text=True, timeout=5)
-            if not r.stdout.strip():
-                log_msg("✅ Nessuna modifica da committare")
-                return jsonify({"ok": True, "message": "Nessuna modifica da pushare", "log": "\n".join(log_lines)})
-
-            # 6. Commit
+            # 5. Always commit (allow-empty so re-runs also push)
             log_msg("💾 Commit in corso...")
-            subprocess.run(["git", "-C", str(p), "commit", "-m", commit_msg],
-                           capture_output=True, timeout=30, check=True)
+            r = subprocess.run(
+                ["git", "-C", str(p), "commit", "--allow-empty", "-m", commit_msg],
+                capture_output=True, text=True, timeout=30,
+            )
+            if r.returncode != 0:
+                log_msg(f"⚠ Commit fallito: {r.stderr.strip() or r.stdout.strip()[:200]}")
+            else:
+                log_msg("✅ Commit creato")
 
             # 7. Push
             log_msg("⬆ Push su GitHub...")
