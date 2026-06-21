@@ -1,0 +1,1181 @@
+{% extends "layout.html" %}
+{% block title %}<span data-i18n="page.title.workspace">Workspace</span>{% endblock %}
+{% block heading %}📁 <span data-i18n="page.heading.workspace">Workspace</span>{% endblock %}
+{% block content %}
+<style>
+    .ws-layout { display: flex; gap: 0; height: calc(100vh - 130px); margin: -24px; }
+    .ws-panel { overflow-y: auto; border-right: 1px solid var(--border); background: var(--surface); }
+    .ws-panel-header { padding: 8px 12px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .ws-panel-header .spacer { flex: 1; }
+    .ws-explorer { width: 250px; min-width: 250px; display: flex; flex-direction: column; }
+    .ws-explorer .ws-panel-body { flex: 1; overflow-y: auto; }
+    .ws-editor { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .ws-editor .ws-panel-body { flex: 1; overflow: auto; padding: 0; }
+    .ws-git { width: 320px; min-width: 320px; display: flex; flex-direction: column; border-right: none; }
+    .ws-git .ws-panel-body { flex: 1; overflow-y: auto; }
+
+    .tree-item { display: flex; align-items: center; gap: 6px; padding: 3px 12px; cursor: pointer; font-size: 0.82rem; color: var(--text-dim); transition: background 0.1s; white-space: nowrap; }
+    .tree-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+    .tree-item.active { background: rgba(88,166,255,0.12); color: var(--blue); }
+    .tree-item .icon { width: 16px; text-align: center; flex-shrink: 0; }
+    .tree-item .name { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    .tree-item .size { font-size: 0.65rem; color: var(--text-dim); opacity: 0.5; margin-left: 4px; }
+    .tree-item .arrow { width: 14px; text-align: center; flex-shrink: 0; color: var(--text-dim); font-size: 0.6rem; }
+    .tree-depth-0 { padding-left: 8px; }
+    .tree-depth-1 { padding-left: 24px; }
+    .tree-depth-2 { padding-left: 40px; }
+    .tree-depth-3 { padding-left: 56px; }
+    .tree-depth-4 { padding-left: 72px; }
+    .tree-depth-5 { padding-left: 88px; }
+    .tree-depth-6 { padding-left: 104px; }
+    .tree-depth-7 { padding-left: 120px; }
+    .tree-children { display: none; }
+    .tree-children.open { display: block; }
+    .tree-item.dir-open > .arrow:before { content: '▼'; }
+    .tree-item.dir-closed > .arrow:before { content: '▶'; }
+    .tree-item.dir-loading > .arrow:before { content: '⏳'; }
+
+    .ws-search-bar { padding: 6px 8px; border-bottom: 1px solid var(--border); display: flex; gap: 4px; }
+    .ws-search-bar input { flex: 1; font-size: 0.78rem; padding: 4px 8px; }
+
+    .editor-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); overflow-x: auto; flex-shrink: 0; }
+    .editor-tab { padding: 6px 14px; font-size: 0.78rem; cursor: pointer; border-right: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+    .editor-tab.active { background: var(--bg); color: var(--text); border-bottom: 2px solid var(--blue); }
+    .editor-tab .close { cursor: pointer; opacity: 0.4; font-size: 0.7rem; padding: 0 2px; }
+    .editor-tab .close:hover { opacity: 1; }
+    .editor-tab .dirty { color: var(--yellow); font-size: 0.6rem; }
+    .editor-toolbar { padding: 4px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; align-items: center; font-size: 0.72rem; color: var(--text-dim); flex-shrink: 0; }
+    .editor-toolbar .file-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .editor-body { flex: 1; overflow: auto; }
+    .editor-body textarea { width: 100%; height: 100%; border: none; padding: 12px 16px; font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 0.82rem; line-height: 1.6; background: var(--bg); color: var(--text); resize: none; outline: none; tab-size: 4; }
+    .editor-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-dim); font-size: 0.85rem; text-align: center; padding: 40px; }
+
+    .git-header { padding: 6px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; font-size: 0.8rem; flex-shrink: 0; }
+    .git-header select { font-size: 0.75rem; padding: 2px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); max-width: 120px; }
+    .git-section-header { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+    .git-file { display: flex; align-items: center; gap: 6px; padding: 4px 12px; font-size: 0.78rem; cursor: pointer; border-bottom: 1px solid var(--border); }
+    .git-file:hover { background: rgba(255,255,255,0.03); }
+    .git-file .g-status { width: 20px; text-align: center; }
+    .git-file .g-status.M { color: var(--yellow); }
+    .git-file .g-status.A { color: var(--green); }
+    .git-file .g-status.D { color: var(--red); }
+    .git-file .g-status['?'] { color: var(--orange); }
+    .git-file .g-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .git-box { padding: 8px; border-bottom: 1px solid var(--border); }
+    .git-box textarea { font-size: 0.78rem; min-height: 36px; padding: 6px 10px; resize: vertical; width: 100%; }
+    .git-box .gb-actions { display: flex; gap: 4px; margin-top: 4px; }
+    .diff-view { padding: 8px 12px; font-family: 'SF Mono', monospace; font-size: 0.72rem; line-height: 1.5; white-space: pre-wrap; overflow-x: auto; max-height: 350px; overflow-y: auto; }
+    .diff-add { background: rgba(63,185,80,0.08); color: var(--green); }
+    .diff-del { background: rgba(248,81,73,0.08); color: var(--red); }
+    .diff-header { color: var(--blue); font-weight: 600; }
+    .diff-hunk { color: var(--purple); }
+
+    .status-bar { display: flex; align-items: center; gap: 8px; padding: 3px 12px; font-size: 0.65rem; color: var(--text-dim); border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+    .btn-icon { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; }
+    .btn-icon:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+    .context-menu { position: fixed; z-index: 1000; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 0; min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: none; }
+    .context-menu.open { display: block; }
+    .context-menu .cm-item { padding: 6px 16px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 8px; color: var(--text); }
+    .context-menu .cm-item:hover { background: rgba(88,166,255,0.1); }
+    .context-menu .cm-sep { height: 1px; background: var(--border); margin: 4px 0; }
+    .context-menu .cm-item.danger { color: var(--red); }
+    .context-menu .cm-item.danger:hover { background: rgba(248,81,73,0.1); }
+    .binary-warning { padding: 20px; text-align: center; color: var(--yellow); font-size: 0.85rem; }
+    .git-log-item { padding: 5px 12px; font-size: 0.75rem; border-bottom: 1px solid var(--border); }
+    .git-log-item .hash { color: var(--blue); font-family: monospace; }
+    .git-log-empty { padding: 20px; text-align: center; color: var(--text-dim); font-size: 0.8rem; }
+    .img-preview { display: flex; align-items: center; justify-content: center; height: 100%; padding: 20px; background: #0d1117; }
+    .img-preview img { max-width: 100%; max-height: calc(100vh - 250px); border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
+    .find-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 999; display: none; align-items: flex-start; justify-content: center; padding-top: 80px; }
+    .find-overlay.open { display: flex; }
+    .find-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; width: 500px; max-width: 90vw; max-height: 70vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+    .find-box .fb-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .find-box input { flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.85rem; outline: none; }
+    .find-box input:focus { border-color: var(--blue); }
+    .find-results { max-height: 300px; overflow-y: auto; margin-top: 8px; }
+    .find-result { padding: 6px 10px; border-radius: 4px; cursor: pointer; font-family: 'SF Mono', monospace; font-size: 0.75rem; }
+    .find-result:hover { background: rgba(88,166,255,0.1); }
+    .find-result .fr-path { color: var(--blue); }
+    .find-result .fr-line { color: var(--text-dim); }
+    .find-result .fr-match { background: rgba(255,211,61,0.2); color: var(--yellow); border-radius: 2px; padding: 0 2px; }
+    .cursor-pos { font-size: 0.65rem; color: var(--text-dim); margin-left: auto; }
+</style>
+
+<div class="ws-layout">
+    <!-- Explorer -->
+    <div class="ws-panel ws-explorer">
+        <div class="ws-panel-header">
+            📂 <span id="wsDirLabel" data-i18n="workspace.explorer.header">Explorer</span>
+            <span class="spacer"></span>
+            <button class="btn-icon" onclick="showNewFile()" title="New file" data-i18n-title="workspace.explorer.new_file">📄</button>
+            <button class="btn-icon" onclick="showNewDir()" title="New folder" data-i18n-title="workspace.explorer.new_folder">📁</button>
+            <button class="btn-icon" onclick="toggleHidden()" id="hideBtn" title="Toggle hidden files" data-i18n-title="workspace.explorer.toggle_hidden">👁</button>
+            <button class="btn-icon" onclick="showSearch()" title="Search (Cmd+P / Ctrl+P)" data-i18n-title="workspace.explorer.search">🔍</button>
+            <button class="btn-icon" onclick="loadTree(cwd)" title="Refresh" data-i18n-title="workspace.explorer.refresh">🔄</button>
+        </div>
+        <div class="ws-search-bar" id="wsSearchBar" style="display:none">
+            <input id="wsSearchInput" placeholder="Cerca file…" onkeydown="if(event.key==='Enter')searchFiles(this.value)" data-i18n="workspace.explorer.search_placeholder">
+            <button class="btn btn-sm" onclick="document.getElementById('wsSearchBar').style.display='none'">✕</button>
+        </div>
+        <div class="ws-panel-body" id="wsTree">
+                <div class="text-dim" style="padding:20px;text-align:center;font-size:0.8rem" data-i18n="workspace.git.loading">Caricamento…</div>
+        </div>
+        <div class="status-bar">
+            <span id="wsStatus" data-i18n="workspace.explorer.status">📁 /</span>
+            <button class="btn-icon" onclick="changeCwd()" title="Change CWD" data-i18n-title="workspace.explorer.change_cwd">📂</button>
+        </div>
+    </div>
+
+    <!-- Editor -->
+    <div class="ws-panel ws-editor">
+        <div class="editor-tabs" id="editorTabs"></div>
+        <div class="editor-toolbar" id="editorToolbar" style="display:none">
+            <span class="file-path" id="editorPath"></span>
+            <span id="editorSize" style="opacity:0.5"></span>
+            <span id="editorEncoding" style="opacity:0.4;margin-left:4px"></span>
+            <span class="spacer"></span>
+            <button class="btn-icon" onclick="downloadFile()" title="Download" data-i18n-title="workspace.editor.download">⬇</button>
+            <button class="btn btn-sm" onclick="saveFile()" id="saveBtn" style="display:none" data-i18n="workspace.editor.save">💾 Salva (Cmd+S / Ctrl+S)</button>
+        </div>
+        <div class="editor-body" id="editorBody">
+            <div class="editor-empty">
+                <span data-i18n="workspace.editor.empty">Seleziona un file dall'esploratore</span><br>
+                <small style="opacity:0.6" data-i18n="workspace.editor.empty_hint">Cmd+P cerca · Cmd+S salva · Cmd+Alt+↑/↓ apri/chiudi cartella</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Git Panel -->
+    <div class="ws-panel ws-git">
+        <div class="ws-panel-header"><span data-i18n="workspace.git.header">🔀 Git</span> <span class="spacer"></span><button class="btn-icon" onclick="loadGitStatus()" title="Refresh" data-i18n-title="workspace.git.refresh">🔄</button></div>
+        <div class="git-header">
+            <select id="gitBranchSelect" onchange="switchBranch(this.value)" title="Switch branch" data-i18n-title="workspace.git.switch_branch"></select>
+            <input id="gitBranchInput" placeholder="new branch…" style="flex:1;font-size:0.72rem;padding:2px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text)" onkeydown="if(event.key==='Enter')createBranch(this.value)" data-i18n="workspace.git.new_branch">
+            <button class="btn btn-sm" onclick="createBranch(document.getElementById('gitBranchInput').value)" style="font-size:0.65rem;padding:2px 8px" data-i18n="workspace.git.create_branch">➕</button>
+            <button class="btn-icon" onclick="loadGitLog()" title="Log" data-i18n-title="workspace.git.log">📋</button>
+        </div>
+        <div id="gitBody" style="flex:1;overflow-y:auto">
+            <div id="gitStatus">
+            <div class="text-dim" style="padding:20px;text-align:center;font-size:0.8rem" data-i18n="workspace.explorer.loading">Caricamento…</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="ctxMenu">
+    <div class="cm-item" data-action="open" onclick="ctxOpen()" data-i18n="workspace.context.open">📄 Apri</div>
+    <div class="cm-item" data-action="edit" onclick="ctxEdit()" data-i18n="workspace.context.rename">✏️ Rinomina</div>
+    <div class="cm-item" data-action="download" onclick="ctxDownload()" data-i18n="workspace.context.download">⬇ Scarica</div>
+    <div class="cm-item" data-action="openchat" onclick="ctxOpenInChat()" data-i18n="workspace.context.open_chat">💬 Apri in Chat</div>
+    <div class="cm-sep"></div>
+    <div class="cm-item" data-action="newfile" onclick="ctxNewFile()" data-i18n="workspace.context.new_file">📄 Nuovo file</div>
+    <div class="cm-item" data-action="newdir" onclick="ctxNewDir()" data-i18n="workspace.context.new_folder">📁 Nuova cartella</div>
+    <div class="cm-sep"></div>
+    <div class="cm-item danger" data-action="delete" onclick="ctxDelete()" data-i18n="workspace.context.delete">🗑 Elimina</div>
+</div>
+
+<!-- Find in Project -->
+<div class="find-overlay" id="findOverlay" onclick="if(event.target===this)closeFind()">
+    <div class="find-box">
+        <div class="fb-row">
+            <input id="findQuery" placeholder="Search in project…" onkeydown="if(event.key==='Enter')findInProject()" data-i18n="workspace.find.placeholder">
+            <button class="btn btn-sm" onclick="findInProject()" data-i18n="workspace.find.find">🔍 Find</button>
+            <button class="btn btn-sm" onclick="closeFind()" data-i18n="common.close">✕</button>
+        </div>
+        <label style="font-size:0.75rem;color:var(--text-dim);display:flex;align-items:center;gap:4px">
+            <input type="checkbox" id="findCase"> <span data-i18n="workspace.find.match_case">Match case</span>
+        </label>
+        <div class="find-results" id="findResults"></div>
+    </div>
+</div>
+
+<!-- New file/dir modal -->
+<div class="modal-overlay" id="newItemModal">
+    <div class="modal" style="max-width:400px">
+        <h3 id="newItemTitle" data-i18n="workspace.new_file.title">Nuovo file</h3>
+        <div class="form-group">
+            <label id="newItemLabel" data-i18n="workspace.new_file.label">Nome file</label>
+            <input id="newItemName" placeholder="es. index.html" onkeydown="if(event.key==='Enter')confirmNewItem()" data-i18n="workspace.new_file.placeholder">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" onclick="closeNewItemModal()" data-i18n="common.cancel">Annulla</button>
+            <button class="btn btn-primary" onclick="confirmNewItem()" data-i18n="common.create">Crea</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let cwd = '.';
+    let defaultWorkspace = '.';
+    let showHidden = false;
+    let openFiles = {};
+    let activeFile = null;
+    let ctxTarget = null;
+    let newItemMode = '';
+    let newItemParent = '';
+    let gitChanges = { staged: [], unstaged: [], branch: '' };
+    let editorUndo = [];
+    let editorRedo = [];
+    const imgExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp', 'bmp']);
+
+    // ─── Utilities ────────────────────────────────────────────────
+    function parentDir(p) {
+        if (p === '/' || p === '.') return '.';
+        const idx = p.lastIndexOf('/');
+        return idx > 0 ? p.substring(0, idx) : '.';
+    }
+
+    function fileName(p) {
+        const idx = p.lastIndexOf('/');
+        return idx >= 0 ? p.substring(idx + 1) : p;
+    }
+
+    function fmtSize(bytes) {
+        if (bytes == null) return '';
+        if (bytes < 1024) return bytes + 'B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+        return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+    }
+
+    function getFileIcon(name) {
+        const ext = name.split('.').pop().toLowerCase();
+        const map = {
+            js: '🟨', ts: '🟦', py: '🐍', rb: '💎', php: '🐘', go: '🔵', rs: '🦀',
+            html: '🌐', css: '🎨', json: '📋', yml: '📋', yaml: '📋', md: '📝',
+            txt: '📄', sh: '⚡', bash: '⚡', sql: '🗃', xml: '📄', svg: '🖼',
+            png: '🖼', jpg: '🖼', jpeg: '🖼', gif: '🖼', ico: '🖼',
+            gitignore: '🙈', dockerfile: '🐳', editorconfig: '⚙',
+            lock: '🔒', toml: '📋', cfg: '⚙', ini: '⚙', env: '🔒',
+        };
+        return map[ext] || map[name.toLowerCase()] || '📄';
+    }
+
+    function getLang(name) {
+        const ext = name.split('.').pop().toLowerCase();
+        const map = {
+            js: 'javascript', ts: 'typescript', py: 'python', rb: 'ruby',
+            go: 'go', rs: 'rust', html: 'html', css: 'css', json: 'json',
+            yml: 'yaml', yaml: 'yaml', md: 'markdown', sh: 'bash',
+            bash: 'bash', sql: 'sql', xml: 'xml', php: 'php',
+        };
+        return map[ext] || '';
+    }
+
+    // ─── File Tree (expand/collapse) ─────────────────────────────
+    let treeChildrenCache = {};
+
+    async function loadTree(dir) {
+        const el = document.getElementById('wsTree');
+        el.innerHTML = '<div class="text-dim" style="padding:20px;text-align:center;font-size:0.8rem">' + __('workspace.explorer.loading') + '</div>';
+        treeChildrenCache = {};
+        try {
+            const data = await api('/api/workspace/tree?path=' + encodeURIComponent(dir));
+            cwd = data.path;
+            document.getElementById('wsStatus').textContent = '📁 ' + data.cwd;
+            document.getElementById('wsDirLabel').textContent = fileName(data.path) || '/';
+            el.innerHTML = '';
+            renderTree(data.entries, 0, el);
+        } catch (e) {
+            el.innerHTML = '<div style="padding:20px;color:var(--red);font-size:0.8rem">' + __('common.error') + ': ' + escHtml(e.message) + '</div>';
+        }
+    }
+
+    function renderTree(entries, depth, container) {
+        const filtered = entries.filter(e => showHidden || !e.name.startsWith('.'));
+        if (!filtered.length && depth === 0) {
+            container.innerHTML = '<div class="text-dim" style="padding:12px;text-align:center;font-size:0.75rem">' + __('project.run.empty') + '</div>';
+            return;
+        }
+        filtered.sort((a, b) => {
+            if (a.is_dir && !b.is_dir) return -1;
+            if (!a.is_dir && b.is_dir) return 1;
+            return a.name.localeCompare(b.name);
+        });
+        for (const e of filtered) {
+            const item = document.createElement('div');
+            item.className = 'tree-item tree-depth-' + Math.min(depth, 6);
+            item.dataset.path = e.path;
+            item.dataset.isDir = e.is_dir;
+            item.dataset.depth = depth;
+            const icon = e.is_dir ? '📁' : getFileIcon(e.name);
+            if (e.is_dir) {
+                item.innerHTML = '<span class="arrow"></span><span class="icon">' + icon + '</span><span class="name">' + escHtml(e.name) + '</span>';
+                item.onclick = () => toggleDir(e.path, item);
+                item.classList.add('dir-closed');
+            } else {
+                item.innerHTML = '<span class="arrow"></span><span class="icon">' + icon + '</span><span class="name">' + escHtml(e.name) + '</span><span class="size">' + fmtSize(e.size) + '</span>';
+                item.onclick = () => openFile(e.path);
+            }
+            item.oncontextmenu = (ev) => {
+                ev.preventDefault();
+                showCtx(ev, e.is_dir ? 'dir:' + e.path : 'file:' + e.path);
+            };
+            container.appendChild(item);
+
+            // Children container for dirs
+            if (e.is_dir) {
+                const childrenDiv = document.createElement('div');
+                childrenDiv.className = 'tree-children';
+                childrenDiv.dataset.parent = e.path;
+                container.appendChild(childrenDiv);
+            }
+        }
+    }
+
+    function findDirItem(path) {
+        return document.querySelector('.tree-item[data-path="' + CSS.escape(path) + '"]');
+    }
+
+    function findChildrenContainer(path) {
+        return document.querySelector('.tree-children[data-parent="' + CSS.escape(path) + '"]');
+    }
+
+    async function toggleDir(path, item) {
+        const children = findChildrenContainer(path);
+        if (!children) return;
+        if (children.classList.contains('open')) {
+            collapseDir(path, item, children);
+        } else {
+            await expandDir(path, item, children);
+        }
+    }
+
+    function collapseDir(path, item, children) {
+        children.classList.remove('open');
+        children.innerHTML = '';
+        item.classList.remove('dir-open');
+        item.classList.add('dir-closed');
+        item.querySelector('.icon').textContent = '📁';
+        delete treeChildrenCache[path];
+    }
+
+    async function expandDir(path, item, children) {
+        item.classList.remove('dir-closed');
+        item.classList.add('dir-loading');
+        item.querySelector('.icon').textContent = '📂';
+        try {
+            const cacheKey = path;
+            let entries = treeChildrenCache[cacheKey];
+            if (!entries) {
+                const data = await api('/api/workspace/tree?path=' + encodeURIComponent(path));
+                entries = data.entries;
+                treeChildrenCache[cacheKey] = entries;
+            }
+            const parentDepth = parseInt(item.dataset.depth || '0');
+            renderTree(entries, parentDepth + 1, children);
+            children.classList.add('open');
+            item.classList.remove('dir-loading');
+            item.classList.add('dir-open');
+        } catch (e) {
+            item.classList.remove('dir-loading');
+            item.classList.add('dir-closed');
+            item.querySelector('.icon').textContent = '📁';
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    function toggleHidden() {
+        showHidden = !showHidden;
+        document.getElementById('hideBtn').style.opacity = showHidden ? '1' : '0.5';
+        treeChildrenCache = {};
+        loadTree(cwd);
+    }
+
+    // ─── Context Menu ──────────────────────────────────────────────
+    function showCtx(event, target) {
+        ctxTarget = target;
+        const menu = document.getElementById('ctxMenu');
+        const type = target.split(':')[0];
+        const path = target.substring(target.indexOf(':') + 1);
+        const isDir = type === 'dir';
+        const isRoot = path === '.' || path === parentDir(cwd);
+        // Show/hide items
+        document.querySelectorAll('#ctxMenu .cm-item[data-action]').forEach(el => el.style.display = '');
+        if (isRoot) {
+            document.querySelector('[data-action="delete"]').style.display = 'none';
+            document.querySelector('[data-action="rename"]').style.display = 'none';
+        }
+        if (!isDir) {
+            document.querySelector('[data-action="open"]').style.display = '';
+            document.querySelector('[data-action="download"]').style.display = '';
+            document.querySelector('[data-action="openchat"]').style.display = '';
+            document.querySelector('[data-action="newfile"]').style.display = 'none';
+            document.querySelector('[data-action="newdir"]').style.display = 'none';
+        } else {
+            document.querySelector('[data-action="open"]').style.display = 'none';
+            document.querySelector('[data-action="download"]').style.display = 'none';
+            document.querySelector('[data-action="openchat"]').style.display = 'none';
+        }
+        menu.classList.add('open');
+        menu.style.left = Math.min(event.clientX, window.innerWidth - 180) + 'px';
+        menu.style.top = Math.min(event.clientY, window.innerHeight - 200) + 'px';
+    }
+
+    document.addEventListener('click', () => { document.getElementById('ctxMenu').classList.remove('open'); });
+    document.addEventListener('contextmenu', () => { document.getElementById('ctxMenu').classList.remove('open'); });
+
+    function ctxTargetPath() { return ctxTarget ? ctxTarget.substring(ctxTarget.indexOf(':') + 1) : ''; }
+    function ctxTargetType() { return ctxTarget ? ctxTarget.split(':')[0] : ''; }
+
+    function ctxOpen() { if (ctxTargetType() === 'file') openFile(ctxTargetPath()); }
+    async function ctxOpenInChat() {
+        const path = ctxTargetPath();
+        if (ctxTargetType() !== 'file' || !path) return;
+        try {
+            const data = await api('/api/workspace/read?path=' + encodeURIComponent(path));
+            sessionStorage.setItem('fileContext', JSON.stringify({ path, content: data.content }));
+            window.location.href = '/chat';
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+    function ctxEdit() {
+        const path = ctxTargetPath();
+        const name = prompt(__('workspace.context.rename'), fileName(path));
+        if (name && name !== fileName(path)) {
+            const dir = parentDir(path);
+            renameItem(path, dir + '/' + name);
+        }
+    }
+    function ctxDownload() { if (ctxTargetType() === 'file') downloadFile(ctxTargetPath()); }
+    function ctxNewFile() { showNewFile(ctxTargetPath()); }
+    function ctxNewDir() { showNewDir(ctxTargetPath()); }
+    function ctxDelete() {
+        const path = ctxTargetPath();
+        const itemType = ctxTargetType() === 'dir' ? __('workspace.item.confirm_dir') : __('workspace.item.confirm_file');
+        if (confirm(__('workspace.item.confirm_delete', {type: itemType, name: fileName(path)}))) {
+            deleteItem(path);
+        }
+    }
+
+    // ─── File Operations ───────────────────────────────────────────
+    function showNewFile(parent) {
+        newItemMode = 'file';
+        newItemParent = parent || cwd;
+        document.getElementById('newItemTitle').textContent = __('workspace.new_file.title');
+        document.getElementById('newItemLabel').textContent = __('workspace.new_file.label') + ' in ' + fileName(newItemParent);
+        document.getElementById('newItemName').value = '';
+        document.getElementById('newItemModal').classList.add('open');
+        setTimeout(() => document.getElementById('newItemName').focus(), 100);
+    }
+
+    function showNewDir(parent) {
+        newItemMode = 'dir';
+        newItemParent = parent || cwd;
+        document.getElementById('newItemTitle').textContent = __('workspace.new_folder.title');
+        document.getElementById('newItemLabel').textContent = __('workspace.new_folder.label') + ' in ' + fileName(newItemParent);
+        document.getElementById('newItemName').value = '';
+        document.getElementById('newItemModal').classList.add('open');
+        setTimeout(() => document.getElementById('newItemName').focus(), 100);
+    }
+
+    function closeNewItemModal() { document.getElementById('newItemModal').classList.remove('open'); }
+
+    async function confirmNewItem() {
+        const name = document.getElementById('newItemName').value.trim();
+        if (!name) return;
+        const path = newItemParent + '/' + name;
+        try {
+            if (newItemMode === 'dir') {
+                await api('/api/workspace/mkdir', { method: 'POST', body: JSON.stringify({ path }) });
+            } else {
+                await api('/api/workspace/write', { method: 'POST', body: JSON.stringify({ path, content: '' }) });
+                if (newItemMode === 'file') openFile(path);
+            }
+            const createdKey = newItemMode === 'dir' ? 'workspace.item.folder' : 'workspace.item.file';
+            toast(__('workspace.item.created', {type: __(createdKey)}), 'success');
+            closeNewItemModal();
+            // Clear parent cache and re-expand if open
+            const parentPath = newItemParent;
+            const childrenContainer = findChildrenContainer(parentPath);
+            if (childrenContainer && childrenContainer.classList.contains('open')) {
+                const parentItem = findDirItem(parentPath);
+                if (parentItem) {
+                    delete treeChildrenCache[parentPath];
+                    childrenContainer.innerHTML = '';
+                    const entries = (await api('/api/workspace/tree?path=' + encodeURIComponent(parentPath))).entries;
+                    treeChildrenCache[parentPath] = entries;
+                    const pDepth = parseInt(parentItem.dataset.depth || '0');
+                    renderTree(entries, pDepth + 1, childrenContainer);
+                }
+            } else {
+                loadTree(cwd);
+            }
+        } catch (e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function deleteItem(path) {
+        try {
+            await api('/api/workspace/delete', { method: 'POST', body: JSON.stringify({ path }) });
+            // Close tab if open
+            if (openFiles[path]) { closeFile(path); }
+            delete openFiles[path];
+            toast(__('workspace.item.deleted'), 'success');
+            treeChildrenCache = {};
+            loadTree(cwd);
+        } catch (e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    async function renameItem(src, dst) {
+        try {
+            await api('/api/workspace/rename', { method: 'POST', body: JSON.stringify({ src, dst }) });
+            if (openFiles[src]) {
+                openFiles[dst] = openFiles[src];
+                delete openFiles[src];
+                if (activeFile === src) activeFile = dst;
+                // Update tab
+                const tab = document.querySelector('.editor-tab[data-path="' + CSS.escape(src) + '"]');
+                if (tab) {
+                    tab.dataset.path = dst;
+                    tab.innerHTML = escHtml(fileName(dst)) + ' <span class="close" onclick="event.stopPropagation();closeFile(\'' + escHtml(dst) + '\')">✕</span>';
+                }
+            }
+            toast(__('workspace.item.renamed'), 'success');
+            loadTree(cwd);
+        } catch (e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    // ─── File Editor ────────────────────────────────────────────────
+    async function openFile(path) {
+        const isImage = imgExts.has(path.split('.').pop().toLowerCase());
+        // Check if binary
+        try {
+            const info = await api('/api/workspace/info?path=' + encodeURIComponent(path));
+            if (info.is_binary && !isImage) {
+                toast(__('common.error') + ': ' + fileName(path), 'error');
+                const body = document.getElementById('editorBody');
+                body.innerHTML = '<div class="binary-warning">' + __('workspace.editor.binary') + ' (' + info.mimetype + ')<br><small>' + escHtml(path) + '</small><br><br><button class="btn btn-sm" onclick="downloadFile(\'' + escHtml(path) + '\')">' + __('workspace.editor.binary_download') + '</button></div>';
+                document.getElementById('editorToolbar').style.display = 'flex';
+                document.getElementById('editorPath').textContent = path;
+                document.getElementById('editorSize').textContent = fmtSize(info.size);
+                document.getElementById('saveBtn').style.display = 'none';
+                return;
+            }
+            if (isImage) {
+                const body = document.getElementById('editorBody');
+                body.innerHTML = '<div class="img-preview"><img src="/api/workspace/read?path=' + encodeURIComponent(path) + '" alt="' + escHtml(fileName(path)) + '"></div>';
+                document.getElementById('editorToolbar').style.display = 'flex';
+                document.getElementById('editorPath').textContent = path;
+                document.getElementById('editorSize').textContent = fmtSize(info.size);
+                document.getElementById('saveBtn').style.display = 'none';
+                document.getElementById('editorEncoding').textContent = path.split('.').pop().toUpperCase();
+                // Add to tabs
+                if (!openFiles[path]) {
+                    openFiles[path] = { content: '', saved: '', path, name: fileName(path), isImage: true };
+                    addTab(path, 'tab-' + path.replace(/[^a-zA-Z0-9]/g, '_'));
+                }
+                setActiveTab(path);
+                return;
+            }
+        } catch (e) { /* ignore */ }
+
+        if (openFiles[path]) {
+            setActiveTab(path);
+            renderEditor(path);
+            return;
+        }
+        try {
+            const data = await api('/api/workspace/read?path=' + encodeURIComponent(path));
+            openFiles[path] = { content: data.content, saved: data.content, path, name: fileName(path) };
+            const tabId = 'tab-' + path.replace(/[^a-zA-Z0-9]/g, '_');
+            addTab(path, tabId);
+            setActiveTab(path);
+            renderEditor(path);
+        } catch (e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    function addTab(path, tabId) {
+        const bar = document.getElementById('editorTabs');
+        // Remove "no tabs" if present
+        const existing = document.querySelector('.editor-tab[data-path="' + CSS.escape(path) + '"]');
+        if (existing) return;
+        const tab = document.createElement('div');
+        tab.className = 'editor-tab';
+        tab.dataset.path = path;
+        tab.id = tabId;
+        tab.innerHTML = escHtml(fileName(path)) + ' <span class="close" onclick="event.stopPropagation();closeFile(\'' + escHtml(path) + '\')">✕</span>';
+        tab.onclick = () => { setActiveTab(path);
+            renderEditor(path); };
+        bar.appendChild(tab);
+    }
+
+    function setActiveTab(path) {
+        document.querySelectorAll('.editor-tab').forEach(t => t.classList.remove('active'));
+        const tab = document.querySelector('.editor-tab[data-path="' + CSS.escape(path) + '"]');
+        if (tab) tab.classList.add('active');
+        activeFile = path;
+    }
+
+    function closeFile(path) {
+        const file = openFiles[path];
+        if (file && file.content !== file.saved) {
+            if (!confirm(__('workspace.editor.confirm_close'))) return;
+        }
+        delete openFiles[path];
+        const tab = document.querySelector('.editor-tab[data-path="' + CSS.escape(path) + '"]');
+        if (tab) tab.remove();
+        const keys = Object.keys(openFiles);
+        if (keys.length > 0) {
+            setActiveTab(keys[0]);
+            renderEditor(keys[0]);
+        } else {
+            document.getElementById('editorBody').innerHTML = '<div class="editor-empty">' + __('workspace.editor.empty_after_close') + '</div>';
+            document.getElementById('editorToolbar').style.display = 'none';
+        }
+    }
+
+    function renderEditor(path) {
+        const file = openFiles[path];
+        if (!file) return;
+        if (file.isImage) return;
+        const body = document.getElementById('editorBody');
+        const toolbar = document.getElementById('editorToolbar');
+        toolbar.style.display = 'flex';
+        document.getElementById('editorPath').textContent = path;
+        document.getElementById('editorSize').textContent = fmtSize(file.content.length);
+        document.getElementById('editorEncoding').textContent = getLang(file.name) ? getLang(file.name).toUpperCase() : '';
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.style.display = file.content !== file.saved ? 'inline-flex' : 'none';
+        updateTabDirty(path, file.content !== file.saved);
+
+        body.innerHTML = '<textarea id="editorContent" spellcheck="false" wrap="off">' + escHtml(file.content) + '</textarea>';
+        const ta = document.getElementById('editorContent');
+        ta.addEventListener('input', () => onEditorChange(path));
+        ta.addEventListener('keydown', editorKeydown);
+        ta.addEventListener('click', updateCursorPos);
+        ta.addEventListener('keyup', updateCursorPos);
+        ta.focus();
+        editorUndo = [];
+        editorRedo = [];
+        // Status bar cursor init
+        const statusBar = document.querySelector('.status-bar');
+        let cursorEl = document.getElementById('cursorPos');
+        if (!cursorEl) {
+            cursorEl = document.createElement('span');
+            cursorEl.id = 'cursorPos';
+            cursorEl.className = 'cursor-pos';
+            statusBar.appendChild(cursorEl);
+        }
+        updateCursorPos();
+    }
+
+    function updateCursorPos() {
+        const ta = document.getElementById('editorContent');
+        const el = document.getElementById('cursorPos');
+        if (!ta || !el) return;
+        const val = ta.value;
+        const pos = ta.selectionStart;
+        const before = val.substring(0, pos);
+        const line = (before.match(/\n/g) || []).length + 1;
+        const lastNewline = before.lastIndexOf('\n');
+        const col = pos - lastNewline;
+        const totalLines = (val.match(/\n/g) || []).length + 1;
+        const file = openFiles[activeFile];
+        const lang = file ? getLang(file.name) : '';
+        el.textContent = __('workspace.editor.cursor', {line: line, col: col, lang: lang ? ' · ' + lang.toUpperCase() : '', total: totalLines});
+    }
+
+    function onEditorChange(path) {
+        const file = openFiles[path];
+        if (!file) return;
+        const ta = document.getElementById('editorContent');
+        const newContent = ta.value;
+        if (newContent !== file.content) {
+            editorUndo.push(file.content);
+            if (editorUndo.length > 100) editorUndo.shift();
+            editorRedo = [];
+        }
+        file.content = newContent;
+        const dirty = file.content !== file.saved;
+        document.getElementById('saveBtn').style.display = dirty ? 'inline-flex' : 'none';
+        updateTabDirty(path, dirty);
+    }
+
+    function updateTabDirty(path, dirty) {
+        const tab = document.querySelector('.editor-tab[data-path="' + CSS.escape(path) + '"]');
+        if (!tab) return;
+        const existing = tab.querySelector('.dirty');
+        if (dirty) {
+            if (!existing) {
+                const dot = document.createElement('span');
+                dot.className = 'dirty';
+                dot.textContent = '●';
+                tab.appendChild(dot);
+            }
+        } else {
+            if (existing) existing.remove();
+        }
+    }
+
+    function editorKeydown(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+            e.preventDefault();
+            const path = activeFile;
+            const file = openFiles[path];
+            if (!file || !editorUndo.length) return;
+            editorRedo.push(file.content);
+            file.content = editorUndo.pop();
+            document.getElementById('editorContent').value = file.content;
+            onEditorChange(path);
+        }
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') {
+            e.preventDefault();
+            const path = activeFile;
+            const file = openFiles[path];
+            if (!file || !editorRedo.length) return;
+            editorUndo.push(file.content);
+            file.content = editorRedo.pop();
+            document.getElementById('editorContent').value = file.content;
+            onEditorChange(path);
+        }
+    }
+
+    async function saveFile() {
+        if (!activeFile || !openFiles[activeFile]) return;
+        const file = openFiles[activeFile];
+        try {
+            await api('/api/workspace/write', {
+                method: 'POST',
+                body: JSON.stringify({ path: activeFile, content: file.content }),
+            });
+            file.saved = file.content;
+            document.getElementById('saveBtn').style.display = 'none';
+            updateTabDirty(activeFile, false);
+            toast(__('workspace.editor.saved_toast'), 'success');
+        } catch (e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function downloadFile(path) {
+        const filePath = path || activeFile;
+        if (!filePath) return;
+        try {
+            const data = await api('/api/workspace/read?path=' + encodeURIComponent(filePath));
+            const blob = new Blob([data.content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName(filePath);
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    // ─── Find in Project ─────────────────────────────────────────
+    function showFind() {
+        document.getElementById('findOverlay').classList.add('open');
+        document.getElementById('findQuery').value = '';
+        document.getElementById('findResults').innerHTML = '';
+        setTimeout(() => document.getElementById('findQuery').focus(), 100);
+    }
+
+    function closeFind() {
+        document.getElementById('findOverlay').classList.remove('open');
+    }
+
+    async function findInProject() {
+        const q = document.getElementById('findQuery').value.trim();
+        const cs = document.getElementById('findCase').checked;
+        if (!q) return;
+        const el = document.getElementById('findResults');
+        el.innerHTML = '<div class="text-dim" style="padding:8px;font-size:0.8rem">' + __('workspace.find.searching') + '</div>';
+        try {
+            const data = await api('/api/workspace/search?q=' + encodeURIComponent(q) +
+                '&path=' + encodeURIComponent(cwd) +
+                (cs ? '&case=1' : ''));
+            el.innerHTML = '';
+            if (!data.results || !data.results.length) {
+                el.innerHTML = '<div class="text-dim" style="padding:8px;font-size:0.8rem">' + __('workspace.find.no_results', {q: escHtml(q)}) + '</div>';
+                return;
+            }
+            // Group by file
+            const byFile = {};
+            for (const r of data.results) {
+                if (!byFile[r.path]) byFile[r.path] = [];
+                byFile[r.path].push(r);
+            }
+            const filePaths = Object.keys(byFile).sort();
+            for (const fp of filePaths) {
+                const matches = byFile[fp];
+                el.innerHTML += '<div style="padding:4px 0"><span class="fr-path">📄 ' + escHtml(fp) + '</span> <span class="text-dim">(' + matches.length + ')</span></div>';
+                for (const m of matches.slice(0, 5)) {
+                    const lineStr = m.line ? escHtml(m.line.replace(new RegExp(escHtml(q), 'gi'), '<span class="fr-match">$&</span>')) : '';
+                    el.innerHTML += '<div class="find-result" onclick="openFile(\'' + escHtml(fp) + '\')">' +
+                        '<span class="fr-line">L' + m.lineno + ':</span> ' + lineStr +
+                        '</div>';
+                }
+                if (matches.length > 5) {
+                    el.innerHTML += '<div class="text-dim" style="padding:2px 8px;font-size:0.72rem">' + __('workspace.find.more_matches', {n: matches.length - 5}) + '</div>';
+                }
+            }
+        } catch (e) {
+            el.innerHTML = '<div style="color:var(--red);font-size:0.8rem">' + __('common.error') + ': ' + escHtml(e.message) + '</div>';
+        }
+    }
+
+    // ─── Drag & Drop ─────────────────────────────────────────────
+    document.addEventListener('dragover', function(e) {
+        if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault();
+            document.body.style.outline = '2px solid var(--blue)';
+            document.body.style.outlineOffset = '-2px';
+        }
+    });
+    document.addEventListener('dragleave', function(e) {
+        if (!e.relatedTarget || e.relatedTarget.nodeName === 'HTML') {
+            document.body.style.outline = 'none';
+        }
+    });
+    document.addEventListener('drop', async function(e) {
+        e.preventDefault();
+        document.body.style.outline = 'none';
+        const files = Array.from(e.dataTransfer.files);
+        if (!files.length) return;
+        // Determine target dir: if drop target is a tree item, use its path; else use cwd
+        let targetDir = cwd;
+        const treeItem = e.target.closest('.tree-item');
+        if (treeItem && treeItem.dataset.isDir === 'true') {
+            targetDir = treeItem.dataset.path;
+        } else if (treeItem && treeItem.dataset.isDir !== 'true') {
+            targetDir = parentDir(treeItem.dataset.path);
+        }
+        for (const file of files) {
+            const dest = targetDir + '/' + file.name;
+            try {
+                const text = await file.text();
+                await api('/api/workspace/write', {
+                    method: 'POST',
+                    body: JSON.stringify({ path: dest, content: text }),
+                });
+                toast(__('workspace.upload.success', {name: file.name}), 'success');
+            } catch (e) {
+                toast(__('common.error') + ': ' + file.name + ' - ' + e.message, 'error');
+            }
+        }
+        treeChildrenCache = {};
+        loadTree(cwd);
+    });
+    function showSearch() {
+        const bar = document.getElementById('wsSearchBar');
+        bar.style.display = bar.style.display === 'none' ? 'flex' : 'none';
+        if (bar.style.display === 'flex') document.getElementById('wsSearchInput').focus();
+    }
+
+    async function searchFiles(q) {
+        if (!q) return;
+        const el = document.getElementById('wsTree');
+        el.innerHTML = '<div class="text-dim" style="padding:20px;text-align:center;font-size:0.8rem">' + __('workspace.find.searching') + '</div>';
+        try {
+            const data = await api('/api/workspace/search?q=' + encodeURIComponent(q) + '&path=' + encodeURIComponent(cwd));
+            el.innerHTML = '';
+            if (!data.results || !data.results.length) {
+                el.innerHTML = '<div class="text-dim" style="padding:20px;text-align:center;font-size:0.8rem">' + __('workspace.find.no_results', {q: q}) + '</div>';
+                return;
+            }
+            for (const r of data.results) {
+                const item = document.createElement('div');
+                item.className = 'tree-item tree-depth-0';
+                const badge = r.match === 'filename' ? '📄' : '🔍';
+                const lineInfo = r.lineno ? ' L' + r.lineno : '';
+                item.innerHTML = '<span class="icon">' + badge + '</span><span class="name">' + escHtml(r.name) + lineInfo + '</span><span style="font-size:0.65rem;opacity:0.5;margin-left:auto;overflow:hidden;text-overflow:ellipsis;max-width:120px">' + escHtml(r.match) + '</span>';
+                item.onclick = () => openFile(r.path);
+                el.appendChild(item);
+            }
+        } catch (e) {
+            el.innerHTML = '<div style="padding:20px;color:var(--red)">' + __('common.error') + ': ' + escHtml(e.message) + '</div>';
+        }
+    }
+
+    // ─── CWD ─────────────────────────────────────────────────────────
+    function changeCwd() {
+        const dir = prompt(__('workspace.cwd.prompt'), cwd);
+        if (dir) loadTree(dir);
+    }
+
+    // ─── Git ─────────────────────────────────────────────────────────
+    async function loadGitStatus() {
+        const el = document.getElementById('gitStatus');
+        try {
+            const data = await api('/api/git/status?path=' + encodeURIComponent(cwd));
+            if (data.error) {
+                el.innerHTML = '<div class="text-dim" style="padding:12px;font-size:0.8rem">⚠ ' + escHtml(data.error) + '</div>';
+                return;
+            }
+            const lines = data.status.trim().split('\n');
+            const branchLine = lines[0] || '';
+            gitChanges.branch = branchLine.replace('## ', '').split('...')[0] || 'unknown';
+            const files = lines.slice(1).filter(Boolean);
+
+            // Parse staged/unstaged
+            const staged = [];
+            const unstaged = [];
+            for (const line of files) {
+                const s = line.substring(0, 1);
+                const ws = line.substring(1, 2);
+                const file = line.substring(3).trim();
+                if (s !== ' ' && s !== '?') staged.push({ status: s, file });
+                if (ws !== ' ' || s === '?') unstaged.push({ status: ws === ' ' ? s : ws || '?', file });
+                if (s === '?' || ws === '?') {
+                    // Already handled
+                }
+            }
+
+            gitChanges.staged = staged;
+            gitChanges.unstaged = unstaged;
+
+            // Update branch select
+            updateBranchSelect();
+
+            let html = '<div style="padding:6px 12px;font-size:0.78rem;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center">' +
+                '🌿 ' + escHtml(gitChanges.branch) +
+                '<span class="spacer" style="flex:1"></span>' +
+                (staged.length || unstaged.length ? '<span class="text-dim" style="font-size:0.65rem">' + __('workspace.git.staged', {n: staged.length}) + ' · ' + __('workspace.git.unstaged', {n: unstaged.length}) + '</span>' : '') +
+                '</div>';
+
+            if (!staged.length && !unstaged.length) {
+                html += '<div class="text-dim" style="padding:16px;text-align:center;font-size:0.8rem">' + __('workspace.git.clean') + '</div>';
+                el.innerHTML = html;
+                return;
+            }
+
+            // Unstaged
+            if (unstaged.length) {
+                html += '<div class="git-section-header">' + __('workspace.git.unstaged', {n: unstaged.length}) + '</div>';
+                for (const f of unstaged) {
+                    html += '<div class="git-file" onclick="showGitDiff(\'' + escHtml(f.file) + '\',0)">' +
+                        '<span class="g-status ' + f.status + '">' + statusChar(f.status) + '</span>' +
+                        '<span class="g-name">' + escHtml(f.file) + '</span></div>';
+                }
+            }
+
+            // Staged
+            if (staged.length) {
+                html += '<div class="git-section-header">' + __('workspace.git.staged', {n: staged.length}) + '</div>';
+                for (const f of staged) {
+                    html += '<div class="git-file" onclick="showGitDiff(\'' + escHtml(f.file) + '\',1)">' +
+                        '<span class="g-status ' + f.status + '">' + statusChar(f.status) + '</span>' +
+                        '<span class="g-name">' + escHtml(f.file) + '</span></div>';
+                }
+            }
+
+            // Commit box
+            html += '<div class="git-box">' +
+                '<textarea id="gitCommitMsg" placeholder="' + __('workspace.git.commit_placeholder') + '" rows="2"></textarea>' +
+                '<div class="gb-actions">' +
+                '<button class="btn btn-sm" onclick="stageAll()" ' + (unstaged.length ? '' : 'disabled') + '>' + __('workspace.git.stage_all') + '</button>' +
+                '<button class="btn btn-sm btn-primary" onclick="commitFiles()">' + __('workspace.git.commit') + '</button>' +
+                '</div></div>';
+
+            el.innerHTML = html;
+        } catch (e) {
+            el.innerHTML = '<div style="padding:12px;color:var(--red);font-size:0.8rem">' + __('common.error') + ': ' + escHtml(e.message) + '</div>';
+        }
+    }
+
+    async function updateBranchSelect() {
+        try {
+            const data = await api('/api/git/log?path=' + encodeURIComponent(cwd) + '&count=100');
+            const sel = document.getElementById('gitBranchSelect');
+            // Get branch names from git
+            const r = await fetch('/api/git/status?path=' + encodeURIComponent(cwd) + '&branches=1');
+            // Simple approach: use branch command
+            const branchesResp = await api('/api/git/branch', {
+                method: 'POST',
+                body: JSON.stringify({ path: cwd, action: 'list', name: '' }),
+            });
+            // Fallback: just show current
+        } catch (e) {}
+    }
+
+    function statusChar(s) {
+        const map = { M: '✏️', A: '➕', D: '➖', R: '📦', '?': '❓', '!!': '🚫' };
+        return map[s] || s;
+    }
+
+    async function showGitDiff(file, staged) {
+        try {
+            const params = new URLSearchParams({ path: cwd, file, staged: staged ? '1' : '0' });
+            const data = await api('/api/git/diff?' + params.toString());
+            // Show in editor area temporarily
+            const body = document.getElementById('editorBody');
+            body.innerHTML = '<div style="padding:4px 12px;font-size:0.7rem;color:var(--text-dim);border-bottom:1px solid var(--border);display:flex;gap:8px">' +
+                '<span>' + __('workspace.git.diff_header', {file: escHtml(file)}) + '</span>' +
+                '<span class="spacer" style="flex:1"></span>' +
+                '<a href="#" onclick="renderEditor(activeFile);return false" style="font-size:0.7rem">' + __('workspace.git.diff_back') + '</a></div>' +
+                '<div class="diff-view">' + (data.diff ? formatDiff(data.diff) : '<div class="text-dim">' + __('workspace.git.no_diff') + '</div>') + '</div>';
+            const toolbar = document.getElementById('editorToolbar');
+            toolbar.style.display = 'flex';
+            document.getElementById('editorPath').textContent = '📊 ' + file;
+            document.getElementById('editorSize').textContent = '';
+            document.getElementById('editorEncoding').textContent = '';
+            document.getElementById('saveBtn').style.display = 'none';
+        } catch (e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function stageAll() {
+        try {
+            const r = await api('/api/git/add', {
+                method: 'POST',
+                body: JSON.stringify({ path: cwd, all: true }),
+            });
+            if (r.returncode === 0) {
+                toast(__('workspace.git.toast.staged'), 'success');
+                loadGitStatus();
+            } else {
+                toast(__('workspace.git.toast.stage_error', {msg: r.stderr || __('common.error')}), 'error');
+            }
+        } catch (e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    async function commitFiles() {
+        const msg = document.getElementById('gitCommitMsg');
+        if (!msg || !msg.value.trim()) { toast(__('workspace.git.toast.commit_msg_required'), 'error'); return; }
+        try {
+            const r = await api('/api/git/commit', {
+                method: 'POST',
+                body: JSON.stringify({ path: cwd, message: msg.value.trim(), add: true }),
+            });
+            if (r.returncode === 0) {
+                toast(__('workspace.git.toast.commit_success', {msg: (r.stdout || '').trim()}), 'success');
+                msg.value = '';
+                loadGitStatus();
+            } else {
+                toast(__('workspace.git.toast.commit_error', {msg: r.stderr || __('common.error')}), 'error');
+            }
+        } catch (e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    async function createBranch(name) {
+        if (!name) return;
+        try {
+            const r = await api('/api/git/branch', {
+                method: 'POST',
+                body: JSON.stringify({ path: cwd, name, action: 'create' }),
+            });
+            if (r.returncode === 0) {
+                toast(__('workspace.git.toast.branch_created', {name: name}), 'success');
+                document.getElementById('gitBranchInput').value = '';
+                loadGitStatus();
+            } else {
+                toast(__('workspace.git.toast.branch_error', {msg: r.stderr || __('common.error')}), 'error');
+            }
+        } catch (e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    async function switchBranch(name) {
+        if (!name) return;
+        try {
+            const r = await api('/api/git/branch', {
+                method: 'POST',
+                body: JSON.stringify({ path: cwd, name, action: 'checkout' }),
+            });
+            if (r.returncode === 0) {
+                toast(__('workspace.git.toast.branch_switched', {name: name}), 'success');
+                loadGitStatus();
+            } else {
+                toast(__('workspace.git.toast.branch_error', {msg: r.stderr || __('common.error')}), 'error');
+                loadGitStatus();
+            }
+        } catch (e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    async function loadGitLog() {
+        try {
+            const data = await api('/api/git/log?path=' + encodeURIComponent(cwd) + '&count=30');
+            const el = document.getElementById('gitStatus');
+            let html = '<div style="padding:6px 12px;font-size:0.78rem;border-bottom:1px solid var(--border);display:flex;gap:8px">' +
+                '<a href="#" onclick="loadGitStatus();return false" style="font-size:0.75rem">' + __('workspace.git.log_back') + '</a>' +
+                '<span style="font-size:0.75rem">' + __('workspace.git.log_header', {n: data.commits.length}) + '</span></div>';
+            for (const c of data.commits) {
+                html += '<div class="git-log-item">' +
+                    '<div><span class="hash">' + escHtml(c.hash) + '</span> <span>' + escHtml(c.message) + '</span></div>' +
+                    '<div class="text-dim" style="font-size:0.7rem">' + escHtml(c.author) + ' · ' + escHtml(c.date) + '</div></div>';
+            }
+            if (!data.commits.length) html += '<div class="git-log-empty">' + __('workspace.git.no_commits') + '</div>';
+            el.innerHTML = html;
+        } catch (e) {}
+    }
+
+    function formatDiff(diff) {
+        return diff.split('\n').map(line => {
+            if (line.startsWith('diff --git') || line.startsWith('---') || line.startsWith('+++'))
+                return '<div class="diff-header">' + escHtml(line) + '</div>';
+            if (line.startsWith('@@'))
+                return '<div class="diff-hunk">' + escHtml(line) + '</div>';
+            if (line.startsWith('+'))
+                return '<div class="diff-add">' + escHtml(line) + '</div>';
+            if (line.startsWith('-'))
+                return '<div class="diff-del">' + escHtml(line) + '</div>';
+            return '<div>' + escHtml(line) + '</div>';
+        }).join('');
+    }
+
+    // ─── Keyboard ───────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+        const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            if (isInput) return;
+            e.preventDefault();
+            saveFile();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+            e.preventDefault();
+            showSearch();
+            document.getElementById('wsSearchInput')?.focus();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
+            e.preventDefault();
+            showFind();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'g') {
+            e.preventDefault();
+            loadGitStatus();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'l') {
+            e.preventDefault();
+            loadGitLog();
+        }
+        if (e.key === 'Escape') {
+            document.getElementById('ctxMenu').classList.remove('open');
+            document.getElementById('wsSearchBar').style.display = 'none';
+            closeFind();
+        }
+    });
+
+    // ─── Branch list helper ─────────────────────────────────────────
+    async function refreshBranchList() {
+        // Get unique branches from reflog or just show current
+        try {
+            const data = await api('/api/git/status?path=' + encodeURIComponent(cwd));
+            const lines = data.status.trim().split('\n');
+            const branchLine = lines[0] || '';
+            const curr = branchLine.replace('## ', '').split('...')[0] || 'unknown';
+            // Try to get all branches
+            const branches = [curr];
+            const sel = document.getElementById('gitBranchSelect');
+            sel.innerHTML = branches.map(b => '<option value="' + escHtml(b) + '" ' + (b === curr ? 'selected' : '') + '>' + escHtml(b) + '</option>') +
+                (branches.length > 1 ? '' : '');
+        } catch (e) {}
+    }
+
+    // ─── Init ────────────────────────────────────────────────────────
+    async function initWorkspace() {
+        try {
+            const cfg = await api('/api/config');
+            defaultWorkspace = cfg.workspace_default_path || '.';
+            cwd = defaultWorkspace;
+        } catch(e) {}
+        loadTree(cwd);
+        loadGitStatus();
+    }
+    initWorkspace();
+</script>
+{% endblock %}

@@ -1,0 +1,479 @@
+{% extends "layout.html" %}
+{% block title %}Agents{% endblock %}
+{% block heading %}🤖 Agents{% endblock %}
+{% block content %}
+<style>
+    .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+    .agent-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; transition: border-color 0.15s; position: relative; }
+    .agent-card:hover { border-color: #58a6ff; }
+    .agent-card.fav { border-color: #d29922; }
+    .agent-card .top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+    .agent-card .top h4 { margin: 0; font-size: 0.95rem; }
+    .agent-card .fav-btn { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 0 4px; color: var(--text-dim); transition: color 0.15s; }
+    .agent-card .fav-btn:hover { color: #d29922; }
+    .agent-card .fav-btn.active { color: #d29922; }
+    .agent-card .desc { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 8px; flex: 1; }
+    .agent-card .meta { font-size: 0.72rem; color: var(--text-dim); display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .agent-card .meta span { background: var(--bg); padding: 2px 8px; border-radius: 4px; }
+    .agent-card .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+    .agent-card .tags .tag { font-size: 0.65rem; padding: 2px 8px; border-radius: 10px; background: rgba(88,166,255,0.12); color: #58a6ff; border: 1px solid rgba(88,166,255,0.2); }
+    .agent-card .stats { font-size: 0.7rem; color: var(--text-dim); margin-bottom: 8px; padding: 4px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; gap: 12px; }
+    .agent-card .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+    .badge-local { background: rgba(63,185,80,0.15); color: #3fb950; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 600; }
+    .badge-online { background: rgba(88,166,255,0.15); color: #58a6ff; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 600; }
+    .badge-auto { background: var(--bg); color: var(--text-dim); padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; }
+    .filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .filter-bar input { flex: 1; min-width: 180px; }
+    .filter-bar .btn-tag { font-size: 0.7rem; padding: 4px 12px; border-radius: 12px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); cursor: pointer; }
+    .filter-bar .btn-tag.active { background: rgba(88,166,255,0.12); color: #58a6ff; border-color: #58a6ff; }
+    .filter-bar .btn-tag:hover { border-color: #58a6ff; color: var(--text); }
+    .toggle-wrap { display: flex; gap: 16px; align-items: center; padding: 10px 0; }
+    .toggle-wrap label { margin: 0; cursor: pointer; }
+    input[type="checkbox"] { width: auto; accent-color: var(--green); }
+    .perms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+    .perms-grid label { font-size: 0.8rem; }
+    .file-input-wrap { position: relative; overflow: hidden; display: inline-block; }
+    .file-input-wrap input[type="file"] { position: absolute; left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+    .param-row { display: flex; gap: 12px; }
+    .param-row .form-group { flex: 1; }
+    .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-bottom: 16px; }
+    .template-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; cursor: pointer; transition: border-color 0.15s; }
+    .template-card:hover { border-color: #58a6ff; }
+    .template-card h5 { margin: 0 0 4px; font-size: 0.85rem; }
+    .template-card p { margin: 0; font-size: 0.75rem; color: var(--text-dim); }
+    .template-card .t-tags { display: flex; gap: 4px; margin-top: 6px; }
+    .template-card .t-tags span { font-size: 0.6rem; padding: 1px 6px; border-radius: 8px; background: rgba(88,166,255,0.1); color: #58a6ff; }
+    .active-badge { display: inline-block; background: rgba(63,185,80,0.15); color: #3fb950; font-size: 0.6rem; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+</style>
+
+<div class="filter-bar">
+    <input type="text" id="agentSearch" data-i18n="agents.search.placeholder" placeholder="Cerca agenti per nome, descrizione, tag…" oninput="renderFiltered()">
+    <span class="text-dim text-sm"><span id="agentCount">0</span> agenti</span>
+    <button class="btn btn-sm" onclick="exportAllAgents()" data-i18n="agents.export_all" data-i18n-title="agents.export_all" title="Esporta tutti">📤 Tutti</button>
+    <span class="file-input-wrap">
+        <button class="btn btn-sm" data-i18n="agents.import">📥 Importa</button>
+        <input type="file" accept=".json" onchange="importAgent(event)">
+    </span>
+    <button class="btn btn-sm" onclick="showTemplates()" data-i18n="agents.from_template" data-i18n-title="agents.from_template" title="Nuovo da template">✨ Da template</button>
+    <button class="btn btn-primary btn-sm" onclick="openAgentModal()" data-i18n="agents.new">+ Nuovo</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteAllAgents()" data-i18n="agents.delete_all">🗑 Rimuovi tutti</button>
+</div>
+
+<div id="tagFilters" class="filter-bar" style="display:none"></div>
+
+<div id="agentsList">
+    <div class="text-dim" style="text-align:center;padding:40px" data-i18n="common.loading">Caricamento...</div>
+</div>
+
+<div class="modal-overlay" id="agentModal">
+    <div class="modal">
+        <h3 id="agentModalTitle" data-i18n="agents.modal.title_new">Nuovo agente</h3>
+        <div class="form-group">
+            <label data-i18n="agents.modal.name">Nome agente</label>
+            <input id="agentName" data-i18n="agents.modal.name_placeholder" placeholder="es. code-reviewer">
+        </div>
+        <div class="form-group">
+            <label data-i18n="agents.modal.description">Descrizione</label>
+            <input id="agentDesc" data-i18n="agents.modal.description_placeholder" placeholder="Cosa fa questo agente...">
+        </div>
+        <div class="form-group">
+            <label data-i18n="agents.modal.model">Modello</label>
+            <select id="agentModel">
+                <option value="auto" data-i18n="agents.modal.model_auto">Auto (routing ibrido)</option>
+                <option value="local" data-i18n="agents.modal.model_local">Solo locale (Ollama)</option>
+                <option value="online" data-i18n="agents.modal.model_online">Solo online</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label data-i18n="agents.modal.mode">Modalità routing</label>
+            <select id="agentMode">
+                <option value="auto" data-i18n="agents.modal.mode_auto">Auto</option>
+                <option value="local" data-i18n="agents.modal.mode_local">Solo locale</option>
+                <option value="online" data-i18n="agents.modal.mode_online">Solo online</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label><span data-i18n="agents.modal.tags">Tag</span> <span class="text-dim" data-i18n="agents.modal.tags_hint">(separati da virgola)</span></label>
+            <input id="agentTags" data-i18n="agents.modal.tags_placeholder" placeholder="es. coding, review, python">
+        </div>
+        <div class="form-group">
+            <label data-i18n="agents.modal.instructions">Istruzioni di sistema</label>
+            <textarea id="agentInstructions" rows="4" data-i18n="agents.modal.instructions_placeholder" placeholder="Istruzioni per l'agente..."></textarea>
+        </div>
+        <div class="param-row">
+            <div class="form-group">
+                <label data-i18n="agents.modal.temperature">Temperature</label>
+                <input id="agentTemp" type="number" step="0.1" min="0" max="2" value="0.7">
+            </div>
+            <div class="form-group">
+                <label data-i18n="agents.modal.max_tokens">Max tokens</label>
+                <input id="agentMaxTokens" type="number" step="1" min="64" max="32768" value="2048">
+            </div>
+            <div class="form-group">
+                <label data-i18n="agents.modal.top_p">Top P</label>
+                <input id="agentTopP" type="number" step="0.05" min="0" max="1" value="0.9">
+            </div>
+        </div>
+        <div class="form-group">
+            <label data-i18n="agents.modal.permissions">Permessi</label>
+            <div class="perms-grid" id="agentPerms"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" onclick="closeAgentModal()" data-i18n="common.cancel">Annulla</button>
+            <button class="btn btn-primary" id="saveAgentBtn" onclick="saveAgent()" data-i18n="common.save">Salva</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="templateModal">
+    <div class="modal">
+        <h3 data-i18n="agents.template.title">Scegli un template</h3>
+        <div id="templateGrid" class="template-grid"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+            <button class="btn" onclick="closeTemplateModal()" data-i18n="common.cancel">Annulla</button>
+            <button class="btn btn-sm" onclick="closeTemplateModal();openAgentModal()" data-i18n="agents.template.start_fresh">Parti da zero</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let editingAgent = null;
+    let allAgents = [];
+    let allStats = {};
+    let templates = [];
+    const PERM_OPTIONS = [
+        { key: 'read', label: __('agents.permission.read') },
+        { key: 'edit', label: __('agents.permission.edit') },
+        { key: 'bash', label: __('agents.permission.bash') },
+        { key: 'websearch', label: __('agents.permission.websearch') },
+        { key: 'webfetch', label: __('agents.permission.webfetch') },
+    ];
+
+    function renderPerms(perms) {
+        const el = document.getElementById('agentPerms');
+        el.innerHTML = PERM_OPTIONS.map(p => `
+            <label><input type="checkbox" data-key="${p.key}" ${perms && perms[p.key] ? 'checked' : ''}> ${p.label}</label>
+        `).join('');
+    }
+
+    function openAgentModal(data, fromTemplate) {
+        editingAgent = data || null;
+        document.getElementById('agentModalTitle').textContent = data ? __('agents.modal.title_edit', {name: data.name}) : __('agents.modal.title_new');
+        document.getElementById('agentName').value = data ? data.name : '';
+        document.getElementById('agentName').disabled = !!data;
+        document.getElementById('agentDesc').value = data ? (data.description || '') : (fromTemplate ? fromTemplate.description : '');
+        document.getElementById('agentModel').value = data ? (data.model || 'auto') : (fromTemplate ? (fromTemplate.model || 'auto') : 'auto');
+        document.getElementById('agentMode').value = data ? (data.mode || 'auto') : (fromTemplate ? (fromTemplate.mode || 'auto') : 'auto');
+        document.getElementById('agentTags').value = data ? (Array.isArray(data.tags) ? data.tags.join(', ') : '') : (fromTemplate && Array.isArray(fromTemplate.tags) ? fromTemplate.tags.join(', ') : '');
+        document.getElementById('agentInstructions').value = data ? (data.instructions || '') : (fromTemplate ? fromTemplate.instructions : '');
+        document.getElementById('agentTemp').value = data ? (data.temperature ?? 0.7) : (fromTemplate ? (fromTemplate.temperature ?? 0.7) : 0.7);
+        document.getElementById('agentMaxTokens').value = data ? (data.max_tokens ?? 2048) : (fromTemplate ? (fromTemplate.max_tokens ?? 2048) : 2048);
+        document.getElementById('agentTopP').value = data ? (data.top_p ?? 0.9) : (fromTemplate ? (fromTemplate.top_p ?? 0.9) : 0.9);
+        renderPerms(data ? (data.permissions || {}) : (fromTemplate ? (fromTemplate.permissions || {}) : {}));
+        document.getElementById('agentModal').classList.add('open');
+    }
+
+    function closeAgentModal() {
+        document.getElementById('agentModal').classList.remove('open');
+        editingAgent = null;
+    }
+
+    async function saveAgent() {
+        const name = document.getElementById('agentName').value.trim();
+        if (!name) { toast(__('agents.toast.name_required'), 'error'); return; }
+
+        const perms = {};
+        document.querySelectorAll('#agentPerms input[type="checkbox"]').forEach(cb => {
+            perms[cb.dataset.key] = cb.checked;
+        });
+
+        const tags = document.getElementById('agentTags').value.split(',').map(t => t.trim()).filter(Boolean);
+
+        const data = {
+            name,
+            description: document.getElementById('agentDesc').value.trim(),
+            model: document.getElementById('agentModel').value,
+            mode: document.getElementById('agentMode').value,
+            tags,
+            instructions: document.getElementById('agentInstructions').value.trim(),
+            permissions: perms,
+            temperature: parseFloat(document.getElementById('agentTemp').value) || 0.7,
+            max_tokens: parseInt(document.getElementById('agentMaxTokens').value) || 2048,
+            top_p: parseFloat(document.getElementById('agentTopP').value) || 0.9,
+        };
+
+        try {
+            if (editingAgent) {
+                await api('/api/agents/' + encodeURIComponent(name), { method: 'PUT', body: JSON.stringify(data) });
+                toast(__('agents.toast.updated'), 'success');
+            } else {
+                await api('/api/agents', { method: 'POST', body: JSON.stringify(data) });
+                toast(__('agents.toast.created'), 'success');
+            }
+            closeAgentModal();
+            loadAgents();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function deleteAgent(name) {
+        if (!confirm(__('agents.delete.confirm', {name: name}))) return;
+        try {
+            await api('/api/agents/' + encodeURIComponent(name), { method: 'DELETE' });
+            toast(__('agents.delete.deleted'), 'success');
+            loadAgents();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function deleteAllAgents() {
+        if (!confirm(__('agents.delete_all.confirm'))) return;
+        try {
+            const r = await api('/api/agents', { method: 'DELETE' });
+            toast(r.deleted + ' agenti rimossi', 'success');
+            loadAgents();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function duplicateAgent(name) {
+        try {
+            const r = await api('/api/agents/' + encodeURIComponent(name) + '/duplicate', { method: 'POST' });
+            toast(__('agents.duplicate.success', {name: r.name}), 'success');
+            loadAgents();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function toggleFav(agent, el) {
+        const newFav = !agent.favorite;
+        el.classList.toggle('active', newFav);
+        try {
+            await api('/api/agents/' + encodeURIComponent(agent.name), {
+                method: 'PUT',
+                body: JSON.stringify({ favorite: newFav }),
+            });
+            agent.favorite = newFav;
+            const card = el.closest('.agent-card');
+            if (card) card.classList.toggle('fav', newFav);
+            renderFiltered();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    function badgeForMode(mode) {
+        if (mode === 'local') return '<span class="badge-local">' + __('agents.badge.local') + '</span>';
+        if (mode === 'online') return '<span class="badge-online">' + __('agents.badge.online') + '</span>';
+        return '<span class="badge-auto">' + __('agents.badge.auto') + '</span>';
+    }
+
+    const ACTIVE_AGENT = localStorage.getItem('hybrid_agent') || '';
+
+    function renderFiltered() {
+        const q = document.getElementById('agentSearch').value.toLowerCase().trim();
+        const activeTag = document.querySelector('#tagFilters .active');
+        const tagFilter = activeTag ? activeTag.dataset.tag : '';
+
+        const filtered = allAgents.filter(a => {
+            if (q && !a.name.toLowerCase().includes(q) && !(a.description || '').toLowerCase().includes(q) &&
+                !(Array.isArray(a.tags) && a.tags.some(t => t.toLowerCase().includes(q)))) return false;
+            if (tagFilter && !(Array.isArray(a.tags) && a.tags.includes(tagFilter))) return false;
+            return true;
+        });
+
+        // Sort: favorites first, then by last_used desc
+        filtered.sort((a, b) => {
+            if (a.favorite && !b.favorite) return -1;
+            if (!a.favorite && b.favorite) return 1;
+            const sA = allStats[a.name] || {};
+            const sB = allStats[b.name] || {};
+            return (sB.last_used || '') < (sA.last_used || '') ? -1 : 1;
+        });
+
+        const agentCountSpan = document.getElementById('agentCount');
+        agentCountSpan.textContent = __('agents.search.count', {count: allAgents.length});
+        let n = agentCountSpan.nextSibling;
+        while (n) { let t = n; n = n.nextSibling; t.parentNode.removeChild(t); }
+
+        const el = document.getElementById('agentsList');
+        if (!filtered.length) {
+            el.innerHTML = '<div class="text-dim" style="text-align:center;padding:40px">' + __('agents.list.empty') + '</div>';
+            return;
+        }
+
+        el.innerHTML = '<div class="agent-grid">' + filtered.map(a => {
+            const stats = allStats[a.name] || {};
+            const isActive = a.name === ACTIVE_AGENT;
+            const tagHtml = Array.isArray(a.tags) && a.tags.length
+                ? '<div class="tags">' + a.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('') + '</div>'
+                : '';
+            const lastUsed = stats.last_used ? new Date(stats.last_used).toLocaleDateString() : '';
+            return `<div class="agent-card${a.favorite ? ' fav' : ''}">
+                <div class="top">
+                    <h4>${esc(a.name)} ${badgeForMode(a.mode)}${isActive ? '<span class="active-badge">' + __('agents.badge.active') + '</span>' : ''}</h4>
+                    <button class="fav-btn${a.favorite ? ' active' : ''}" onclick="toggleFav(${JSON.stringify(a).replace(/"/g, '&quot;')}, this)" title="Preferito">★</button>
+                </div>
+                <div class="desc">${esc(a.description || __('agents.card.no_description'))}</div>
+                ${tagHtml}
+                <div class="meta">
+                    <span>${__('agents.card.model', {model: a.model || 'auto'})}</span>
+                    <span>${__('agents.card.mode', {mode: a.mode || 'auto'})}</span>
+                    ${a.instructions ? '<span>' + __('agents.card.instructions', {n: a.instructions.length}) + '</span>' : ''}
+                    <span>${__('agents.card.temperature', {temp: a.temperature ?? 0.7})}</span>
+                    <span>${__('agents.card.created', {created: (a.created || '').slice(0, 10)})}</span>
+                </div>
+                <div class="stats">
+                    <span>📞 ${__('agents.card.stats_calls', {n: stats.calls || 0})}</span>
+                    <span>🔤 ${__('agents.card.stats_tokens', {n: stats.total_tokens || 0})}</span>
+                    <span>⏱ ${stats.total_time_s != null ? stats.total_time_s + 's' : '-'}</span>
+                    ${lastUsed ? '<span>🕐 ' + lastUsed + '</span>' : ''}
+                </div>
+                <div class="actions">
+                    <button class="btn btn-sm" onclick="useAgent('${esc(a.name)}')">${__('agents.card.use')}</button>
+                    <button class="btn btn-sm" onclick='openAgentModal(${JSON.stringify(a).replace(/"/g, '&quot;')})'>${__('agents.card.edit')}</button>
+                    <button class="btn btn-sm" onclick="duplicateAgent('${esc(a.name)}')">${__('agents.card.duplicate')}</button>
+                    <button class="btn btn-sm" onclick="exportAgent('${esc(a.name)}')">${__('agents.card.export')}</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteAgent('${esc(a.name)}')">${__('agents.card.delete')}</button>
+                </div>
+            </div>`;
+        }).join('') + '</div>';
+    }
+
+    async function loadAgents() {
+        try {
+            allAgents = await api('/api/agents');
+            const allTags = new Set();
+            allAgents.forEach(a => { if (Array.isArray(a.tags)) a.tags.forEach(t => allTags.add(t)); });
+            const tagContainer = document.getElementById('tagFilters');
+            const sortedTags = [...allTags].sort();
+            if (sortedTags.length) {
+                tagContainer.style.display = 'flex';
+                tagContainer.innerHTML = '<span class="text-dim text-sm">' + __('agents.modal.tags') + ':</span> ' +
+                    '<button class="btn-tag active" data-tag="" onclick="filterByTag(this, \'\')">' + __('agents.tag_filter.all') + '</button>' +
+                    sortedTags.map(t => `<button class="btn-tag" data-tag="${esc(t)}" onclick="filterByTag(this, '${esc(t)}')">${esc(t)}</button>`).join('');
+            } else {
+                tagContainer.style.display = 'none';
+            }
+            renderFiltered();
+            loadAgentStats();
+        } catch(e) {
+            document.getElementById('agentsList').innerHTML = '<div class="text-dim" style="text-align:center;padding:40px">' + __('common.error') + ': ' + e.message + '</div>';
+        }
+    }
+
+    function filterByTag(btn, tag) {
+        document.querySelectorAll('#tagFilters .btn-tag').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderFiltered();
+    }
+
+    function useAgent(name) {
+        localStorage.setItem('hybrid_agent', name);
+        window.location.href = '/chat';
+    }
+
+    async function loadAgentStats() {
+        try {
+            allStats = await api('/api/agents/stats');
+            renderFiltered();
+        } catch(e) {}
+        setTimeout(loadAgentStats, 5000);
+    }
+
+    // ── Templates ──
+
+    async function showTemplates() {
+        try {
+            templates = await api('/api/agents/templates');
+            const grid = document.getElementById('templateGrid');
+            grid.innerHTML = templates.map((t, i) => `
+                <div class="template-card" onclick="applyTemplate(${i})">
+                    <h5>${esc(t.description?.split(' — ')[0] || 'Template')}</h5>
+                    <p>${esc(t.description || '')}</p>
+                    <div class="t-tags">${(t.tags || []).map(tag => `<span>${esc(tag)}</span>`).join('')}</div>
+                </div>
+            `).join('');
+            document.getElementById('templateModal').classList.add('open');
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    function applyTemplate(index) {
+        const t = templates[index];
+        closeTemplateModal();
+        openAgentModal(null, t);
+    }
+
+    function closeTemplateModal() {
+        document.getElementById('templateModal').classList.remove('open');
+    }
+
+    async function exportAgent(name) {
+        try {
+            const a = await api('/api/agents/' + encodeURIComponent(name) + '/export');
+            const blob = new Blob([JSON.stringify(a, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const aEl = document.createElement('a');
+            aEl.href = url;
+            aEl.download = name + '.agent.json';
+            aEl.click();
+            URL.revokeObjectURL(url);
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function exportAllAgents() {
+        try {
+            const blob = new Blob([JSON.stringify(allAgents, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const aEl = document.createElement('a');
+            aEl.href = url;
+            aEl.download = 'all-agents.json';
+            aEl.click();
+            URL.revokeObjectURL(url);
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function importAgent(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            const agents = Array.isArray(data) ? data : [data];
+            let imported = 0, skipped = 0;
+            for (const agent of agents) {
+                if (!agent.name) { skipped++; continue; }
+                try {
+                    await api('/api/agents/import', {
+                        method: 'POST',
+                        body: JSON.stringify(agent),
+                    });
+                    imported++;
+                } catch(e) {
+                    skipped++;
+                }
+            }
+            const skippedStr = skipped ? __('agents.import.skipped', {n: skipped}) : '';
+            toast(__('agents.import.result', {n: imported, s: skippedStr}), 'success');
+            loadAgents();
+        } catch(e) {
+            toast(__('agents.export.error') + ': ' + e.message, 'error');
+        }
+        event.target.value = '';
+    }
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+    loadAgents();
+</script>
+{% endblock %}

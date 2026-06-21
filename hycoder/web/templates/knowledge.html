@@ -1,0 +1,1491 @@
+{% extends "layout.html" %}
+{% block title %}Knowledge Base{% endblock %}
+{% block heading %}🧠 Knowledge Base{% endblock %}
+{% block content %}
+<style>
+    @keyframes kbFadeIn { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
+    @keyframes kbShimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+    @keyframes kbPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes kbFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+    @keyframes kbScaleIn { from { transform:scale(0.85);opacity:0 } to { transform:scale(1);opacity:1 } }
+
+    .tabs { display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--border);padding:0 4px; }
+    .tab { padding:10px 20px;cursor:pointer;font-size:0.85rem;border-bottom:2px solid transparent;color:var(--text-dim);transition:all 0.2s;position:relative;user-select:none; }
+    .tab:hover { color:var(--text);background:rgba(255,255,255,0.02); }
+    .tab.active { color:var(--blue);border-bottom-color:var(--blue); }
+    .tab-content { display:none;animation:kbFadeIn 0.25s ease; }
+    .tab-content.active { display:block; }
+    .kb-grid { display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:960px;margin:0 auto; }
+    .kb-card { background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;transition:box-shadow 0.2s,border-color 0.2s; }
+    .kb-card:hover { border-color:rgba(88,166,255,0.2);box-shadow:0 4px 20px rgba(0,0,0,0.15); }
+    .kb-card h3 { margin:0 0 14px;font-size:0.95rem;display:flex;align-items:center;gap:8px; }
+    .kb-card input,.kb-card select { width:100%;margin-bottom:8px; }
+    .kb-card .btn { margin-top:4px; }
+    .kb-list { max-width:960px;margin:16px auto; }
+    .kb-list table { width:100%;border-collapse:separate;border-spacing:0; }
+    .kb-list th { padding:6px 10px;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);border-bottom:1px solid var(--border);text-align:left; }
+    .kb-list td { padding:6px 10px;font-size:0.85rem;border-bottom:1px solid var(--border);vertical-align:middle; }
+    .kb-list tr:last-child td { border-bottom:none; }
+    .kb-list tr:hover td { background:rgba(255,255,255,0.02); }
+
+    .kb-query { max-width:960px;margin:16px auto;display:flex;gap:8px; }
+    .kb-query input { flex:1; }
+    .kb-results { max-width:960px;margin:0 auto; }
+    .kb-results .hit { background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;font-size:0.85rem;transition:border-color 0.2s,box-shadow 0.2s;animation:kbFadeIn 0.25s ease; }
+    .kb-results .hit:hover { border-color:rgba(88,166,255,0.25);box-shadow:0 2px 12px rgba(0,0,0,0.1); }
+    .kb-results .hit .score { color:var(--accent);font-weight:600; }
+    .kb-results .hit .src { color:var(--text-dim);font-size:0.75rem; }
+    .kb-results .hit .text { margin-top:4px; }
+    .kb-results .hit .hit-text { line-height:1.5;font-size:0.82rem; }
+    .kb-results .hit .hit-source { word-break:break-all; }
+
+    .kb-score-badge { display:inline-flex;align-items:center;justify-content:center;min-width:36px;padding:2px 8px;border-radius:6px;color:#fff;font-size:0.7rem;font-weight:700;letter-spacing:0.3px; }
+    .kb-score-bar { height:4px;border-radius:2px;margin-top:6px;background:var(--border);overflow:hidden; }
+    .kb-score-bar-fill { height:100%;border-radius:2px;transition:width 0.4s ease; }
+    .kb-src-tag { font-size:0.75rem;color:var(--text-dim);display:flex;align-items:center;gap:4px; }
+    .kb-source-table td { vertical-align:middle; }
+    .kb-src-name { font-size:0.85rem; }
+    .kb-type-tag { display:inline-block;padding:2px 10px;border-radius:12px;background:rgba(88,166,255,0.08);font-size:0.7rem;color:var(--blue);font-weight:500;border:1px solid rgba(88,166,255,0.15); }
+
+    .kb-stats-bar { display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);align-items:center; }
+    .kb-type-badge { font-size:0.7rem;padding:3px 10px;border-radius:12px;background:rgba(139,148,158,0.08);color:var(--text-dim);border:1px solid var(--border);font-weight:500; }
+    .stat-label { color:var(--text-dim);font-size:0.85rem; }
+    .stat-val { font-size:1.25rem;font-weight:700; }
+
+    .graph-wrap { display:flex;gap:16px; }
+    .graph-main { flex:1;min-width:0; }
+    .graph-sidebar { width:230px;flex-shrink:0; }
+    .graph-sidebar .g-card { background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;font-size:0.78rem;transition:border-color 0.2s; }
+    .graph-sidebar .g-card:hover { border-color:rgba(139,148,158,0.3); }
+    .graph-sidebar .g-card h4 { font-size:0.75rem;margin-bottom:8px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px; }
+    .graph-sidebar .g-legend { display:flex;flex-direction:column;gap:3px; }
+    .graph-sidebar .g-legend .g-item { display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:4px;cursor:pointer;font-size:0.75rem;transition:background 0.15s; }
+    .graph-sidebar .g-legend .g-item:hover { background:rgba(255,255,255,0.05); }
+    .graph-sidebar .g-legend .g-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(255,255,255,0.2);transition:transform 0.15s; }
+    .graph-sidebar .g-legend .g-item:hover .g-dot { transform:scale(1.25); }
+    .graph-sidebar .g-legend .g-label { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .graph-sidebar .g-legend .g-count { margin-left:auto;color:var(--text-dim);font-size:0.7rem; }
+    .graph-sidebar .g-legend details[open]>summary { margin-bottom:6px; }
+    .graph-sidebar .g-legend details:not(:last-child) { margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border); }
+    .g-legend-type { display:flex;flex-wrap:wrap;gap:4px;padding:2px 0; }
+    .g-type-badge { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:0.7rem;background:var(--surface);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;transition:all 0.15s;font-weight:500; }
+    .g-type-badge:hover { border-color:var(--blue);color:var(--text);background:rgba(88,166,255,0.1);transform:translateY(-1px); }
+    .graph-canvas { width:100%;height:660px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:grab;transition:border-color 0.2s; }
+    .graph-canvas:active { cursor:grabbing; }
+    .graph-toolbar { display:flex;align-items:center;gap:4px;flex-wrap:wrap; }
+    .graph-toolbar .btn-icon { width:38px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:1rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);cursor:pointer;transition:all 0.2s;position:relative; }
+    .graph-toolbar .btn-icon.zoom { color:#58a6ff; } .graph-toolbar .btn-icon.zoom:hover { border-color:#58a6ff;background:rgba(88,166,255,0.2);color:#79c0ff;box-shadow:0 0 14px rgba(88,166,255,0.3);transform:scale(1.05); }
+    .graph-toolbar .btn-icon.fit { color:#d2a8ff; } .graph-toolbar .btn-icon.fit:hover { border-color:#d2a8ff;background:rgba(210,168,255,0.2);color:#e1c8ff;box-shadow:0 0 14px rgba(210,168,255,0.3);transform:scale(1.05); }
+    .graph-toolbar .btn-icon.refresh { color:#f0883e; } .graph-toolbar .btn-icon.refresh:hover { border-color:#f0883e;background:rgba(240,136,62,0.2);color:#f5a86e;box-shadow:0 0 14px rgba(240,136,62,0.3);transform:scale(1.05); }
+    .graph-toolbar .btn-icon.export { color:#3fb950; } .graph-toolbar .btn-icon.export:hover { border-color:#3fb950;background:rgba(63,185,80,0.2);color:#5fd97a;box-shadow:0 0 14px rgba(63,185,80,0.3);transform:scale(1.05); }
+    .graph-toolbar .btn-icon:active { transform:scale(0.9); }
+    .graph-toolbar .btn-icon::after { content:attr(data-label);position:absolute;top:100%;left:50%;transform:translateX(-50%);font-size:0.6rem;color:var(--text-dim);white-space:nowrap;margin-top:3px;opacity:0;pointer-events:none;transition:opacity 0.15s;font-weight:500; }
+    .graph-toolbar .btn-icon:hover::after { opacity:1; }
+    .graph-toolbar .sep { width:1px;height:24px;background:var(--border);margin:0 8px;flex-shrink:0; }
+    .graph-layout-select { font-size:0.75rem;padding:5px 12px;width:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:#ffd33d;cursor:pointer;transition:all 0.2s;font-weight:500; }
+    .graph-layout-select:hover { border-color:#ffd33d;box-shadow:0 0 12px rgba(255,211,61,0.25); }
+
+    .wiki-card { background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:8px;cursor:pointer;transition:border-color 0.2s,box-shadow 0.2s,transform 0.2s;animation:kbFadeIn 0.25s ease; }
+    .wiki-card:hover { border-color:rgba(88,166,255,0.25);box-shadow:0 3px 16px rgba(0,0,0,0.12);transform:translateY(-1px); }
+    .wiki-card h4 { margin:0 0 6px;font-size:0.95rem; }
+    .wiki-card .meta { font-size:0.8rem;color:var(--text-dim);display:flex;gap:12px;align-items:center; }
+    .wiki-card .meta-badge { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:rgba(139,148,158,0.08);font-size:0.7rem;color:var(--text-dim); }
+    .topic-chip { display:inline-block;padding:5px 14px;border-radius:16px;background:var(--bg);border:1px solid var(--border);font-size:0.8rem;margin:3px;cursor:pointer;transition:all 0.2s;font-weight:500; }
+    .topic-chip:hover { border-color:var(--blue);background:rgba(88,166,255,0.08);color:var(--blue);transform:translateY(-1px);box-shadow:0 2px 8px rgba(88,166,255,0.15); }
+
+    .nb-container { max-width:960px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 240px); }
+    .nb-msgs { flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:12px 4px;margin-bottom:10px;scroll-behavior:smooth; }
+    .nb-msgs:empty+.nb-empty { display:block; }
+    .nb-empty { text-align:center;color:var(--text-dim);padding:40px;display:none;font-size:0.9rem; }
+    .nb-inp { display:flex;gap:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px; }
+    .nb-inp input { flex:1;border:none;background:transparent;outline:none;font-size:0.9rem; }
+    .nb-inp .btn { border-radius:8px; }
+    .nb-msg { padding:12px 16px;border-radius:10px;max-width:90%;background:var(--surface);border:1px solid var(--border);font-size:0.85rem;line-height:1.55;animation:kbFadeIn 0.25s ease;position:relative; }
+    .nb-msg.user { background:linear-gradient(135deg,#1f6feb,#1a5cc8);color:#fff;border-color:transparent;align-self:flex-end; }
+    .nb-msg.assistant { align-self:flex-start; }
+    .nb-msg .nb-timestamp { font-size:0.6rem;color:var(--text-dim);margin-top:4px;text-align:right;opacity:0.6; }
+    .nb-msg.user .nb-timestamp { color:rgba(255,255,255,0.5); }
+    .nb-msg .nb-content { white-space:pre-wrap;word-break:break-word; }
+    .nb-msg .nb-content code { background:var(--bg-dim);padding:1px 5px;border-radius:4px;font-size:0.85em; }
+    .nb-msg .nb-sources { margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:0.75rem; }
+    .nb-msg .nb-sources .nb-src { display:flex;align-items:center;gap:6px;padding:3px 0;color:var(--text-dim); }
+    .nb-msg .nb-sources .nb-src .src-score { color:var(--accent);font-weight:700;font-size:0.7rem; }
+    .nb-loading { display:flex;align-items:center;gap:8px;padding:12px 16px;color:var(--text-dim);font-size:0.85rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;align-self:flex-start;animation:kbFadeIn 0.2s ease; }
+    .nb-loading .dots { display:flex;gap:4px; }
+    .nb-loading .dots span { width:8px;height:8px;background:var(--text-dim);border-radius:50%;animation:kbPulse 1.4s infinite; }
+    .nb-loading .dots span:nth-child(2) { animation-delay:0.2s; }
+    .nb-loading .dots span:nth-child(3) { animation-delay:0.4s; }
+
+    .btn-del-src { cursor:pointer;font-size:0.75rem;padding:3px 8px;border:none;background:transparent;color:var(--text-dim);border-radius:4px;transition:all 0.15s; }
+    .btn-del-src:hover { color:var(--red);background:rgba(248,81,73,0.1); }
+    .code-block-wrap { margin:8px 0;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--bg-dim); }
+    .code-block-wrap .code-pane { width:100%; }
+    .code-block-wrap .code-pane pre { margin:0;border:none;border-radius:0;padding:12px;overflow-x:auto; }
+    .code-block-bar { display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg);border-bottom:1px solid var(--border);font-size:0.7rem;color:var(--text-dim); }
+    .code-block-bar .lang-label { margin-right:auto; }
+    .code-block-bar button { font-size:0.7rem;padding:2px 8px;cursor:pointer;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);transition:all 0.15s; }
+    .code-block-bar button:hover { color:var(--text);border-color:var(--blue); }
+
+    .file-browser { background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0;margin-top:8px;max-height:220px;overflow:hidden;display:flex;flex-direction:column; }
+    .file-browser .entry { padding:5px 10px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:8px;transition:background 0.12s; }
+    .file-browser .entry:hover { background:rgba(255,255,255,0.04); }
+    .file-browser .entry.dir { color:var(--blue);font-weight:500; }
+    .file-browser .entry.file { color:var(--text-dim);justify-content:space-between; }
+    .file-browser .entry .path { color:var(--text-dim);font-size:0.7rem;margin-left:auto; }
+    .file-browser .entry.file .file-meta { color:var(--text-dim);font-size:0.65rem;white-space:nowrap; }
+    .file-browser .qi-btn { font-size:0.7rem;padding:1px 5px;border:none;background:rgba(88,166,255,0.08);color:var(--blue);border-radius:4px;cursor:pointer;opacity:0;transition:all 0.15s;line-height:1.4; }
+    .file-browser .entry.file:hover .qi-btn { opacity:0.8; }
+    .file-browser .qi-btn:hover { opacity:1 !important;background:rgba(88,166,255,0.2); }
+    .file-browser .nav-bar { display:flex;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:0.8rem;flex-shrink:0; }
+    .file-browser .nav-bar .btn { padding:2px 8px;font-size:0.75rem; }
+    .file-browser .nav-bar .current-path { color:var(--text);margin-left:auto;font-size:0.7rem;font-family:monospace;opacity:0.7; }
+    .file-browser #fileList { flex:1;overflow-y:auto; }
+
+    .drop-zone { border:2px dashed var(--border);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all 0.25s;background:var(--surface);position:relative;overflow:hidden; }
+    .drop-zone:hover,.drop-zone.drag-over { border-color:var(--blue);background:rgba(88,166,255,0.04); }
+    .drop-zone.drag-over { border-style:solid; }
+    .drop-zone .dz-icon { font-size:2rem;margin-bottom:8px;display:inline-block;animation:kbFloat 2.5s ease-in-out infinite; }
+    .drop-zone:hover .dz-icon { animation:kbFloat 1s ease-in-out infinite; }
+    .drop-zone .dz-text { color:var(--text-dim);font-size:0.85rem; }
+    .drop-zone .dz-hint { color:var(--text-dim);font-size:0.7rem;margin-top:4px;opacity:0.6; }
+    .drop-zone .dz-formats { display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:8px;opacity:0.4;transition:opacity 0.2s; }
+    .drop-zone:hover .dz-formats { opacity:0.7; }
+    .drop-zone .dz-formats span { font-size:0.65rem;padding:2px 7px;border-radius:8px;background:rgba(139,148,158,0.08);border:1px solid var(--border); }
+
+    .upload-queue { display:flex;flex-direction:column;gap:4px;margin-top:8px; }
+    .upload-queue .uq-item { display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--border);font-size:0.78rem;animation:kbFadeIn 0.2s ease; }
+    .upload-queue .uq-item .uq-icon { flex-shrink:0;font-size:1rem; }
+    .upload-queue .uq-item .uq-name { flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500; }
+    .upload-queue .uq-item .uq-status { flex-shrink:0;font-size:0.7rem; }
+    .upload-queue .uq-item .uq-status.done { color:var(--green); }
+    .upload-queue .uq-item .uq-status.error { color:var(--red); }
+    .upload-queue .uq-item .uq-status.progress { color:var(--blue);display:flex;align-items:center;gap:4px; }
+    .upload-queue .uq-item .uq-bar { width:60px;height:4px;border-radius:2px;background:var(--border);overflow:hidden;flex-shrink:0; }
+    .upload-queue .uq-item .uq-bar-fill { height:100%;border-radius:2px;background:linear-gradient(90deg,var(--blue),#79c0ff);transition:width 0.3s ease; }
+
+    .recent-imports { margin-top:10px;padding-top:8px;border-top:1px solid var(--border);display:none; }
+    .recent-imports .ri-title { font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px; }
+    .recent-imports .ri-item { display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:4px;font-size:0.75rem;color:var(--text-dim);transition:background 0.12s; }
+    .recent-imports .ri-item:hover { background:rgba(255,255,255,0.03); }
+    .recent-imports .ri-item .ri-time { margin-left:auto;font-size:0.65rem;opacity:0.6; }
+    .recent-imports .ri-clear { font-size:0.65rem;padding:1px 6px;border:none;background:transparent;color:var(--text-dim);cursor:pointer;border-radius:4px;float:right; }
+    .recent-imports .ri-clear:hover { color:var(--red);background:rgba(248,81,73,0.08); }
+
+    .recent-urls { margin-top:10px;padding-top:8px;border-top:1px solid var(--border);display:none; }
+    .recent-urls .ru-title { font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px; }
+    .recent-urls .ru-item { display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:4px;font-size:0.75rem;color:var(--text-dim);cursor:pointer;transition:background 0.12s; }
+    .recent-urls .ru-item:hover { background:rgba(255,255,255,0.03);color:var(--text); }
+    .recent-urls .ru-item .ru-time { margin-left:auto;font-size:0.65rem;opacity:0.6; }
+
+    .kb-batch-summary { margin-top:8px;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:0.85rem;display:flex;align-items:center;gap:12px;animation:kbFadeIn 0.2s ease; }
+    .kb-batch-summary .bs-done { color:var(--green);font-weight:600; }
+    .kb-batch-summary .bs-err { color:var(--red); }
+    .kb-batch-summary .bs-total { color:var(--text-dim); }
+    .kb-batch-summary .bs-chunks { color:var(--blue);font-weight:600; }
+
+    .dir-current-file { margin-top:3px;font-size:0.7rem;display:flex;align-items:center;gap:4px;animation:kbFadeIn 0.2s ease;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+
+    .dir-preview { margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--border);font-size:0.78rem;display:none;animation:kbFadeIn 0.2s ease; }
+    .dir-preview .dp-header { display:flex;align-items:center;gap:8px;margin-bottom:4px;font-weight:500;font-size:0.8rem; }
+    .dir-preview .dp-files { display:flex;flex-wrap:wrap;gap:3px;max-height:80px;overflow-y:auto; }
+    .dir-preview .dp-files span { font-size:0.7rem;padding:1px 6px;border-radius:4px;background:rgba(139,148,158,0.06);border:1px solid var(--border); }
+
+    .progress-wrap { height:6px;background:var(--border);border-radius:3px;overflow:hidden; }
+    .progress-bar { height:100%;border-radius:3px;transition:width 0.4s ease;background:linear-gradient(90deg,var(--blue),#79c0ff,var(--blue));background-size:200% 100%;animation:kbShimmer 1.5s linear infinite; }
+
+    .kb-empty-state { text-align:center;padding:40px 20px;color:var(--text-dim); }
+    .kb-empty-state .empty-icon { font-size:2.5rem;margin-bottom:12px;opacity:0.5; }
+    .kb-empty-state .empty-title { font-size:1rem;font-weight:600;margin-bottom:6px; }
+    .kb-empty-state .empty-desc { font-size:0.85rem;opacity:0.7; }
+    .kb-empty-state .empty-actions { margin-top:16px;display:flex;gap:8px;justify-content:center; }
+
+    .graph-node-info { border-radius:8px;border:1px solid var(--border);padding:14px;animation:kbFadeIn 0.2s ease; }
+    .graph-node-info .ni-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:8px; }
+    .graph-node-info .ni-title { font-weight:600;font-size:0.9rem; }
+    .graph-node-info .ni-meta { font-size:0.75rem;color:var(--text-dim);margin-bottom:8px;display:flex;gap:10px;flex-wrap:wrap; }
+    .graph-node-info .ni-preview { padding:8px 10px;background:var(--bg);border-radius:6px;font-size:0.8rem;color:var(--text-dim);border:1px solid var(--border);max-height:100px;overflow-y:auto;line-height:1.4; }
+    .graph-node-info .ni-actions { margin-top:10px;display:flex;gap:6px; }
+</style>
+
+<div class="tabs">
+    <span class="tab active" onclick="switchTab('kb-import', this)" data-i18n="knowledge.tab.import">📥 Import</span>
+    <span class="tab" onclick="switchTab('kb-search', this)" data-i18n="knowledge.tab.search">🔍 Cerca</span>
+    <span class="tab" onclick="switchTab('kb-graph', this)" data-i18n="knowledge.tab.graph">🕸 Grafo conoscenza</span>
+    <span class="tab" onclick="switchTab('kb-wiki', this)" data-i18n="knowledge.tab.wiki">📖 LLM Wiki</span>
+    <span class="tab" onclick="switchTab('kb-notebook', this)" data-i18n="knowledge.tab.notebook">📓 NoteAI+</span>
+</div>
+
+<div id="tab-kb-import" class="tab-content active">
+    <div class="kb-grid">
+        <div class="kb-card">
+            <h3 data-i18n="knowledge.import.from_file">📄 Da file</h3>
+            <div id="dropZone" class="drop-zone" ontouchend="document.getElementById('fileInput').click()" onclick="document.getElementById('fileInput').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="event.preventDefault();this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');handleFileDrop(event)">
+                <div class="dz-icon">📄</div>
+                <div class="dz-text" data-i18n="knowledge.import.drop_hint">Trascina file qui o clicca per caricare</div>
+                <div class="dz-hint" data-i18n="knowledge.import.drop_limit">Supporta PDF, MD, TXT, PY, JS, HTML e altri formati</div>
+                <div class="dz-formats" id="dzFormats">
+                    <span>📝 MD</span><span>🐍 PY</span><span>🟨 JS</span><span>🌐 HTML</span><span>📄 TXT</span><span>📕 PDF</span><span>📋 JSON</span><span>⚙️ YAML</span>
+                </div>
+                <input type="file" id="fileInput" style="display:none" multiple accept=".md,.py,.js,.ts,.html,.css,.txt,.pdf,.json,.yaml,.yml,.xml,.toml,.go,.rs,.sh,.url,.env,.cfg,.ini,.conf" onchange="handleFileSelect(this)">
+            </div>
+            <div id="fileQueue" class="upload-queue"></div>
+            <div id="fileResult" class="text-dim" style="margin-top:8px;font-size:0.8rem"></div>
+            <div id="recentImports" class="recent-imports"></div>
+        </div>
+        <div class="kb-card">
+            <h3 data-i18n="knowledge.import.from_dir">📁 Da directory</h3>
+            <div class="file-browser" id="fileBrowser">
+                <div class="nav-bar">
+                    <button class="btn btn-sm" onclick="browseDir('..')" title="Cartella superiore" data-i18n="knowledge.file_browser.up">⬆</button>
+                    <button class="btn btn-sm" onclick="browseDir('/')" title="Radice" data-i18n="knowledge.file_browser.root">🏠</button>
+                    <button class="btn btn-sm" onclick="browseDir('~')" title="Home" data-i18n="knowledge.file_browser.home">👤</button>
+                    <span class="current-path" id="currentPath">/</span>
+                </div>
+                <div style="display:flex;gap:4px;padding:4px 8px;border-bottom:1px solid var(--border)">
+                    <input type="text" id="kbNewDirInput" placeholder="nome nuova cartella" style="flex:1;font-size:0.75rem;padding:2px 6px" onkeydown="if(event.key==='Enter')kbCreateDir()" data-i18n="knowledge.file_browser.new_folder_placeholder">
+                    <button class="btn btn-sm" onclick="kbCreateDir()" title="Crea cartella" style="font-size:0.7rem" data-i18n="knowledge.file_browser.create_folder" data-i18n-title="knowledge.file_browser.create_folder_title">📁+</button>
+                </div>
+                <div id="fileList"></div>
+            </div>
+            <input type="text" id="dirPath" placeholder="/path/to/documents" style="margin-top:8px" data-i18n="knowledge.import.dir_placeholder">
+            <div style="display:flex;gap:6px;margin-top:4px">
+                <input type="text" id="dirPattern" placeholder="Pattern (es. *.md, *.py)" value="*" style="flex:1" data-i18n="knowledge.import.pattern_placeholder">
+                <select id="patternPreset" onchange="document.getElementById('dirPattern').value=this.value" style="max-width:100px;font-size:0.75rem;padding:4px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)">
+                    <option value="">Preset</option>
+                    <option value="*">📄 Tutti</option>
+                    <option value="*.md">📝 Markdown</option>
+                    <option value="*.py">🐍 Python</option>
+                    <option value="*.js,*.ts">🌐 JS/TS</option>
+                    <option value="*.txt">📃 Testo</option>
+                    <option value="*.html,*.css">🎨 HTML/CSS</option>
+                    <option value="*.json,*.yaml,*.yml">⚙️ Config</option>
+                    <option value="*.rst,*.md,*.txt">📖 Documenti</option>
+                </select>
+            </div>
+            <label style="font-size:0.8rem;color:var(--text-dim)" data-i18n="knowledge.import.recursive"><input type="checkbox" id="dirRecursive" checked> Ricorsivo</label>
+            <div style="display:flex;gap:6px;margin-top:4px">
+                <button class="btn btn-sm" onclick="previewDir()" data-i18n="knowledge.import.preview" style="font-size:0.75rem">🔍 Anteprima</button>
+                <button class="btn btn-primary" onclick="learnDir()" data-i18n="knowledge.import.index_dir">Indicizza directory</button>
+            </div>
+            <div id="dirPreview" class="dir-preview"></div>
+            <div id="dirProgress" style="display:none;margin-top:10px">
+                <div class="progress-wrap">
+                    <div id="dirProgressBar" class="progress-bar" style="width:0%"></div>
+                </div>
+                <div id="dirProgressText" class="text-dim text-xs" style="margin-top:5px">0%</div>
+                <div id="dirCurrentFile" class="text-dim text-xs dir-current-file" style="margin-top:3px;display:none"></div>
+            </div>
+            <div id="dirResult" class="text-dim" style="margin-top:8px;font-size:0.8rem"></div>
+        </div>
+        <div class="kb-card">
+            <h3 data-i18n="knowledge.import.from_url">🌐 Da URL</h3>
+            <input type="url" id="urlInput" placeholder="https://example.com/doc" enterkeyhint="go" data-i18n="knowledge.import.url_placeholder" onkeydown="if(event.key==='Enter')learnUrl()">
+            <button class="btn btn-primary" onclick="learnUrl()" data-i18n="knowledge.import.fetch_url">Scarica e indicizza</button>
+            <div id="urlResult" class="text-dim" style="margin-top:8px;font-size:0.8rem"></div>
+            <div id="recentUrls" class="recent-urls"></div>
+        </div>
+    </div>
+    <div class="kb-list" id="kbStatus"></div>
+</div>
+
+<div id="tab-kb-search" class="tab-content">
+    <div class="kb-query">
+        <input type="text" id="queryInput" placeholder="Cerca nella knowledge base..." enterkeyhint="search" data-i18n="knowledge.search.placeholder">
+        <button class="btn btn-primary" onclick="searchKB()" data-i18n="knowledge.search.button">Cerca</button>
+        <button class="btn btn-sm" onclick="document.getElementById('queryInput').value='';document.getElementById('kbResults').innerHTML=''" title="Cancella" style="font-size:0.8rem">✕</button>
+    </div>
+    <div class="kb-results" id="kbResults"></div>
+</div>
+
+<div id="tab-kb-graph" class="tab-content">
+    <div style="max-width:1200px;margin:0 auto">
+        <div class="flex-between mb-2">
+            <p class="text-dim text-sm" data-i18n="knowledge.graph.description">Grafo delle relazioni tra chunk della KB. Clicca un nodo per dettagli, doppio click zoom.<br>Nella legenda a destra: clicca gruppi/tipi per filtrare, apri/chiudi sezioni con ▶.</p>
+            <div class="graph-toolbar">
+                <button class="btn-icon zoom" onclick="zoomGraphIn()" title="Ingrandisci" data-label="Zoom +" data-i18n-title="knowledge.graph.zoom_in">＋</button>
+                <button class="btn-icon zoom" onclick="zoomGraphOut()" title="Rimpicciolisci" data-label="Zoom −" data-i18n-title="knowledge.graph.zoom_out">−</button>
+                <button class="btn-icon fit" onclick="resetGraphView()" title="Adatta alla vista" data-label="Fit" data-i18n-title="knowledge.graph.fit">⊞</button>
+                <div class="sep"></div>
+                <select id="graphLayout" onchange="renderKnowledgeGraph()" class="graph-layout-select">
+                    <option value="force" data-i18n="knowledge.graph.layout_force">Molla</option>
+                    <option value="hierarchical" data-i18n="knowledge.graph.layout_tree">Albero</option>
+                    <option value="radial" data-i18n="knowledge.graph.layout_radial">Radiale</option>
+                </select>
+                <button class="btn-icon refresh" onclick="renderKnowledgeGraph()" title="Rigenera grafo" data-label="Refresh" data-i18n-title="knowledge.graph.refresh">↻</button>
+                <div class="sep"></div>
+                <button class="btn-icon export" onclick="exportGraphPNG()" title="Esporta come PNG" data-label="Esporta" data-i18n-title="knowledge.graph.export">⬇</button>
+            </div>
+        </div>
+        <div class="graph-wrap">
+            <div class="graph-main">
+                <div id="knowledgeGraph" class="graph-canvas"></div>
+                <div id="graphNodeInfo" class="graph-node-info mt-2" style="display:none"></div>
+                <p id="graphInfo" class="text-dim text-sm mt-2" style="text-align:center"></p>
+            </div>
+            <div class="graph-sidebar" id="graphSidebar">
+                <div class="g-card">
+                    <h4>🔍 Filtra</h4>
+                    <input type="text" id="graphFilter" placeholder="Cerca fonte..." style="font-size:0.75rem;padding:4px 6px" oninput="filterGraphNodes()" data-i18n="knowledge.graph.filter_placeholder">
+                </div>
+                <div class="g-card" id="legendCard">
+                    <h4><span data-i18n="knowledge.graph.legend">🎨 Legenda</span> <span style="font-weight:400;color:var(--text-dim);font-size:0.7rem" data-i18n="knowledge.graph.legend_hint">(clicca per filtrare)</span></h4>
+                    <div class="g-legend" id="graphLegend"></div>
+                </div>
+                <div class="g-card">
+                    <h4>📊 Info</h4>
+                    <div id="graphStats"><span class="text-dim" data-i18n="knowledge.graph.stats_loading">Caricamento...</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="tab-kb-wiki" class="tab-content">
+    <div style="max-width:900px;margin:0 auto">
+        <div class="flex-between mb-4">
+            <h3 style="margin:0" data-i18n="knowledge.wiki.heading">📖 Voci wiki generate dalla KB</h3>
+            <div class="flex gap-2">
+                <button class="btn" onclick="suggestTopics()" data-i18n="knowledge.wiki.suggest">💡 Suggerisci argomenti</button>
+                <button class="btn" onclick="loadWiki()" data-i18n="knowledge.wiki.refresh">🔄</button>
+            </div>
+        </div>
+        <div id="suggestedTopics" class="mb-4" style="display:none">
+            <p class="text-dim text-sm mb-2" data-i18n="knowledge.wiki.suggested_intro">Argomenti suggeriti dalla KB. Clicca per generare una pagina wiki:</p>
+            <div id="topicChips"></div>
+        </div>
+        <div id="wikiList"></div>
+    </div>
+</div>
+
+<div id="tab-kb-notebook" class="tab-content">
+    <div class="nb-container">
+        <div class="flex-between mb-2">
+            <h3 style="margin:0" data-i18n="knowledge.notebook.heading">📓 NoteAI+ — Chat con la Knowledge Base</h3>
+            <div class="flex gap-2">
+                <button class="btn btn-sm" onclick="generateBriefing()" data-i18n="knowledge.notebook.generate_briefing">📋 Genera briefing</button>
+                <button class="btn btn-sm" onclick="nbClear()" data-i18n="knowledge.notebook.clear_chat">🗑 Cancella chat</button>
+            </div>
+        </div>
+        <p class="text-dim text-sm mb-3" data-i18n="knowledge.notebook.description">Fai domande sui tuoi documenti. Le risposte sono generate basandosi esclusivamente sui contenuti della knowledge base, con citazioni delle fonti.</p>
+        <div class="nb-msgs" id="nbMsgs"></div>
+        <div class="nb-empty" id="nbEmpty" data-i18n="knowledge.notebook.empty">Fai una domanda sulla knowledge base...</div>
+        <div class="nb-inp">
+            <input type="text" id="nbInput" placeholder="Chiedi qualcosa sui tuoi documenti..." onkeydown="if(event.key==='Enter')nbSend()" data-i18n="knowledge.notebook.placeholder">
+            <button class="btn btn-primary" onclick="nbSend()" id="nbSendBtn" data-i18n="knowledge.notebook.send">Invia</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let _currentBrowsePath = '/';
+
+    function switchTab(name, el) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        el.classList.add('active');
+        if (name === 'kb-search') setTimeout(() => document.getElementById('queryInput')?.focus(), 100);
+        if (name === 'kb-graph') setTimeout(renderKnowledgeGraph, 100);
+        if (name === 'kb-wiki') loadWiki();
+    }
+
+    // ── File Browser ──
+
+    function fileIcon(name) {
+        const ext = (name.split('.').pop() || '').toLowerCase();
+        const icons = { md:'📝', py:'🐍', js:'🟨', ts:'📘', html:'🌐', css:'🎨', txt:'📄', pdf:'📕', json:'📋', yaml:'⚙️', yml:'⚙️', xml:'📐', toml:'⚙️', go:'🔷', rs:'🦀', sh:'💻', url:'🌐', env:'⚙️', cfg:'⚙️', ini:'⚙️', conf:'⚙️', lock:'🔒', gitignore:'🚫' };
+        const lower = name.toLowerCase();
+        if (lower === 'dockerfile') return '🐳';
+        if (lower === 'makefile') return '🔨';
+        if (lower === '.gitignore') return '🚫';
+        return icons[ext] || '📄';
+    }
+
+    function fileSizeStr(bytes) {
+        if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+        if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
+        return bytes + ' B';
+    }
+
+    async function browseDir(path) {
+        if (path === '~') {
+            const home = await api('/api/system/disk?path=~').catch(() => {});
+            if (home && home.path) { path = home.path; }
+            else { path = '/'; }
+        }
+        if (path === '..') {
+            const parts = _currentBrowsePath.replace(/\/$/, '').split('/');
+            parts.pop();
+            path = parts.join('/') || '/';
+        }
+        if (!path.startsWith('/')) path = _currentBrowsePath.replace(/\/$/, '') + '/' + path;
+        _currentBrowsePath = path.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+        document.getElementById('currentPath').textContent = _currentBrowsePath;
+        document.getElementById('dirPath').value = _currentBrowsePath;
+
+        const el = document.getElementById('fileList');
+        el.innerHTML = '<span class="text-dim" style="padding:8px;display:block">⏳ ' + __('knowledge.file_browser.loading') + '</span>';
+
+        try {
+            const r = await fetch('/api/system/disk?path=' + encodeURIComponent(_currentBrowsePath));
+            if (!r.ok) { el.innerHTML = '<span class="error" style="padding:8px;display:block">❌ ' + __('common.error') + '</span>'; return; }
+            const data = await r.json();
+
+            let html = '';
+            if (data.dirs) {
+                for (const d of data.dirs) {
+                    const name = d.split('/').pop() || d;
+                    html += `<div class="entry dir" onclick="browseDir('${escHtml(name)}')">📁 ${escHtml(name)}</div>`;
+                }
+            }
+            if (data.file_info) {
+                for (const fi of data.file_info) {
+                    const name = fi.path.split('/').pop() || fi.path;
+                    const icon = fileIcon(name);
+                    const size = fileSizeStr(fi.size);
+                    const date = fi.mtime ? new Date(fi.mtime * 1000).toLocaleDateString() : '';
+                    html += `<div class="entry file" onclick="document.getElementById('dirPath').value='${escHtml(fi.path)}'">
+                        <span title="${escHtml(fi.path)}">${icon} ${escHtml(name)}</span>
+                        <span style="display:flex;align-items:center;gap:6px">
+                            <span class="file-meta">${date} · ${size}</span>
+                            <button class="qi-btn" onclick="event.stopPropagation();quickIndexFile('${escHtml(fi.path)}')" title="Indicizza questo file">⚡</button>
+                        </span>
+                    </div>`;
+                }
+            } else if (data.files) {
+                for (const f of data.files) {
+                    const name = f.split('/').pop() || f;
+                    const icon = fileIcon(name);
+                    html += `<div class="entry file" onclick="document.getElementById('dirPath').value='${escHtml(f)}'">${icon} ${escHtml(name)}</div>`;
+                }
+            }
+            if (!html) html = '<span class="text-dim" style="padding:12px;display:block;text-align:center">📂 ' + __('knowledge.file_browser.empty') + '</span>';
+            el.innerHTML = html;
+        } catch(e) {
+            el.innerHTML = '<span class="error">' + __('common.error') + ': ' + escHtml(e.message) + '</span>';
+        }
+    }
+
+    async function kbCreateDir() {
+        const name = document.getElementById('kbNewDirInput').value.trim();
+        if (!name) return toast(__('knowledge.file_browser.folder_name_required'), 'error');
+        try {
+            await api('/api/workspace/mkdir', {
+                method: 'POST',
+                body: JSON.stringify({ path: _currentBrowsePath + '/' + name }),
+            });
+            document.getElementById('kbNewDirInput').value = '';
+            browseDir('.');
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    // ── Import ──
+
+    async function loadKB() {
+        const status = await api('/api/knowledge');
+        const el = document.getElementById('kbStatus');
+        if (status.total_chunks === 0) {
+            el.innerHTML = `<div class="kb-empty-state">
+                <div class="empty-icon">📂</div>
+                <div class="empty-title" data-i18n="knowledge.import.empty_title">Knowledge Base vuota</div>
+                <div class="empty-desc" data-i18n="knowledge.import.empty_desc">Importa file, directory o URL per iniziare</div>
+                <div class="empty-actions">
+                    <button class="btn btn-sm" onclick="document.querySelector('.tab[onclick*=\\'kb-import\\']')?.click();document.getElementById('fileInput')?.click()" data-i18n="knowledge.import.from_file">📄 Da file</button>
+                    <button class="btn btn-sm" onclick="browseDir('~')" data-i18n="knowledge.import.from_dir">📁 Da directory</button>
+                </div>
+            </div>`;
+            return;
+        }
+        const typeCount = {};
+        for (const s of status.sources || []) {
+            const t = s.type || 'unknown';
+            typeCount[t] = (typeCount[t] || 0) + s.chunks;
+        }
+        const typeHtml = Object.entries(typeCount)
+            .map(([t, c]) => `<span class="kb-type-badge">${escHtml(t)}: ${c} chunk</span>`).join(' ');
+    let html = `<div class="kb-stats-bar">
+            <span style="font-weight:600;font-size:0.9rem">📊 ${status.total_chunks} chunk</span>
+            <span style="color:var(--text-dim);font-size:0.8rem">da ${status.total_sources} fonti</span>
+            <span style="flex:1"></span>
+            ${typeHtml}
+            <button class="btn btn-sm btn-danger" onclick="clearAllKB()" title="Cancella tutta la knowledge base" style="margin-left:auto">🗑 Svuota KB</button>
+        </div>`;
+        html += '<table class="kb-source-table"><tr><th>' + __('knowledge.table.source') + '</th><th>' + __('knowledge.table.type') + '</th><th>' + __('knowledge.table.chunks') + '</th><th></th></tr>';
+        for (const s of status.sources || []) {
+            const srcEsc = escHtml(s.source);
+            const name = s.source.split('/').pop() || s.source;
+            const icon = fileIcon(name);
+            const ext = (s.type || '').toLowerCase();
+            html += `<tr><td><span class="kb-src-name">${icon} ${srcEsc}</span></td><td><span class="kb-type-tag">${escHtml(s.type || '-')}</span></td><td><span style="font-weight:600">${s.chunks}</span></td>` +
+                `<td><button class="btn-del-src" onclick="deleteSource('${srcEsc.replace(/'/g, "\\'")}')" title="${__('common.delete')}">✕</button></td></tr>`;
+        }
+        html += '</table>';
+        el.innerHTML = html;
+    }
+
+    async function clearAllKB() {
+        if (!confirm('Eliminare tutta la knowledge base?')) return;
+        try {
+            await api('/api/knowledge/clear', { method: 'POST' });
+            toast('Knowledge base cancellata', 'success');
+            loadKB();
+        } catch(e) {
+            toast('Errore: ' + e.message, 'error');
+        }
+    }
+
+    async function deleteSource(source) {
+        if (!confirm(__('knowledge.import.confirm_remove', {source}))) return;
+        try {
+            await api('/api/knowledge/source/delete', {
+                method: 'POST',
+                body: JSON.stringify({ source }),
+            });
+            toast(__('knowledge.import.source_removed'), 'success');
+            loadKB();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function previewDir() {
+        const path = document.getElementById('dirPath').value.trim();
+        if (!path) return toast('Inserisci un percorso', 'error');
+        const pattern = document.getElementById('dirPattern').value.trim() || '*';
+        const recursive = document.getElementById('dirRecursive').checked;
+        const el = document.getElementById('dirPreview');
+        el.style.display = 'block';
+        el.innerHTML = '<span class="text-dim">⏳ Scansione in corso...</span>';
+
+        // Use the from-dir API with dry_run flag
+        try {
+            const r = await api('/api/knowledge/preview-dir', {
+                method: 'POST',
+                body: JSON.stringify({ path, pattern, recursive }),
+            });
+            if (r.error) {
+                el.innerHTML = '<span class="error">❌ ' + escHtml(r.error) + '</span>';
+                return;
+            }
+            let html = '<div class="dp-header">📂 ' + r.total_files + ' file trovati</div>';
+            if (r.files && r.files.length) {
+                const sample = r.files.slice(0, 20);
+                html += '<div class="dp-files">' + sample.map(f => {
+                    const icon = fileIcon(f);
+                    return '<span>' + icon + ' ' + escHtml(f) + '</span>';
+                }).join('') + (r.files.length > 20 ? '<span class="text-dim">… +' + (r.files.length - 20) + '</span>' : '') + '</div>';
+            }
+            if (r.total_chunks_est > 0) {
+                html += '<div class="text-dim text-xs" style="margin-top:4px">🧩 Stima: ~' + r.total_chunks_est + ' chunk</div>';
+            }
+            el.innerHTML = html;
+        } catch(e) {
+            el.innerHTML = '<span class="error">❌ ' + escHtml(e.message) + '</span>';
+        }
+    }
+
+    async function learnDir() {
+        const path = document.getElementById('dirPath').value.trim();
+        if (!path) return toast(__('common.error') + ': ' + __('knowledge.import.dir_placeholder'), 'error');
+        const pattern = document.getElementById('dirPattern').value.trim() || '*';
+        const recursive = document.getElementById('dirRecursive').checked;
+        const resultEl = document.getElementById('dirResult');
+        const progEl = document.getElementById('dirProgress');
+        const barEl = document.getElementById('dirProgressBar');
+        const textEl = document.getElementById('dirProgressText');
+        const fileEl = document.getElementById('dirCurrentFile');
+        resultEl.innerHTML = '<span class="text-dim" style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;animation:kbPulse 1.4s infinite">⏳</span> ' + __('knowledge.import.indexing') + '</span>';
+        try {
+            const r = await api('/api/knowledge/from-dir', {
+                method: 'POST',
+                body: JSON.stringify({ path, pattern, recursive }),
+            });
+            if (!r.job_id) {
+                resultEl.textContent = r.message || 'OK';
+                setTimeout(loadKB, 500);
+                return;
+            }
+            progEl.style.display = '';
+            fileEl.style.display = '';
+            const poll = setInterval(async () => {
+                try {
+                    const st = await api('/api/knowledge/import-status/' + r.job_id);
+                    if (st.status === 'running') {
+                        barEl.style.width = (st.progress || 0) + '%';
+                        textEl.textContent = st.message || '...';
+                        if (st.current_file) {
+                            const icon = fileIcon(st.current_file);
+                            fileEl.innerHTML = icon + ' ' + escHtml(st.current_file);
+                            fileEl.style.display = 'flex';
+                        }
+                    } else {
+                        clearInterval(poll);
+                        progEl.style.display = 'none';
+                        fileEl.style.display = 'none';
+                        resultEl.textContent = st.message || 'Completato';
+                        loadKB();
+                    }
+                } catch(e) {
+                    clearInterval(poll);
+                    progEl.style.display = 'none';
+                    fileEl.style.display = 'none';
+                    resultEl.textContent = __('common.error') + ': ' + e.message;
+                }
+            }, 500);
+        } catch(e) {
+            resultEl.textContent = __('common.error') + ': ' + e.message;
+        }
+    }
+
+    async function quickIndexFile(path) {
+        const btn = event?.target;
+        if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+        try {
+            // Single file: use from-file API
+            const resp = await fetch('/api/knowledge/from-file-path', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path }),
+            });
+            const r = await resp.json();
+            if (r.error) {
+                if (btn) { btn.textContent = '⚡'; btn.disabled = false; }
+                toast('Errore: ' + r.error, 'error');
+                return;
+            }
+            if (btn) btn.textContent = '✓';
+            setTimeout(() => { if (btn) { btn.textContent = '⚡'; btn.disabled = false; } }, 2000);
+            toast('✅ File indicizzato: ' + (r.chunks_added || 0) + ' chunk', 'success');
+            loadKB();
+        } catch(e) {
+            if (btn) { btn.textContent = '⚡'; btn.disabled = false; }
+            toast('Errore: ' + e.message, 'error');
+        }
+    }
+
+    async function handleFileDrop(e) {
+        e.preventDefault();
+        document.getElementById('dropZone').style.borderColor = 'var(--border)';
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length) uploadFiles(files);
+    }
+
+    async function handleFileSelect(input) {
+        const files = Array.from(input.files);
+        if (files.length) uploadFiles(files);
+        input.value = '';
+    }
+
+    async function uploadFiles(files) {
+        const queueEl = document.getElementById('fileQueue');
+        const resultEl = document.getElementById('fileResult');
+        const dropZone = document.getElementById('dropZone');
+        resultEl.innerHTML = '';
+
+        if (!files.length) return;
+        const valid = files;
+
+        dropZone.classList.add('drag-over');
+        let done = 0, errors = 0, totalChunks = 0;
+
+        for (let i = 0; i < valid.length; i++) {
+            const file = valid[i];
+            const icon = fileIcon(file.name);
+            const item = document.createElement('div');
+            item.className = 'uq-item';
+            item.id = 'uq-' + i;
+            item.innerHTML = '<span class="uq-icon">' + icon + '</span><span class="uq-name">' + escHtml(file.name) + '</span><div class="uq-bar"><div class="uq-bar-fill" id="uq-bar-' + i + '" style="width:0%"></div></div><span class="uq-status progress" id="uq-st-' + i + '"><span style="display:inline-block;animation:kbPulse 1.4s infinite">⏳</span></span>';
+            queueEl.appendChild(item);
+
+            try {
+                const bar = document.getElementById('uq-bar-' + i);
+                const st = document.getElementById('uq-st-' + i);
+                bar.style.width = '50%';
+
+                const formData = new FormData();
+                formData.append('file', file);
+                const r = await fetch('/api/knowledge/from-file', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await r.json();
+
+                bar.style.width = '100%';
+                if (data.error) {
+                    st.className = 'uq-status error';
+                    st.textContent = '✕';
+                    errors++;
+                } else {
+                    st.className = 'uq-status done';
+                    st.textContent = '✓ ' + (data.chunks_added || 0) + ' chunk';
+                    totalChunks += data.chunks_added || 0;
+                    done++;
+                    saveRecentImport(file.name, data.chunks_added || 0);
+                }
+            } catch(e) {
+                const st = document.getElementById('uq-st-' + i);
+                st.className = 'uq-status error';
+                st.textContent = '✕';
+                errors++;
+            }
+
+            const pct = Math.round(((i + 1) / valid.length) * 100);
+            document.getElementById('dirProgressBar').style.width = pct + '%';
+        }
+
+        dropZone.classList.remove('drag-over');
+        renderRecentImports();
+
+        if (done > 0) {
+            loadKB();
+            const summary = document.createElement('div');
+            summary.className = 'kb-batch-summary';
+            summary.innerHTML = '<span class="bs-done">✅ ' + done + ' fatto</span>' + (errors ? '<span class="bs-err">✕ ' + errors + ' errore</span>' : '') + '<span class="bs-chunks">🧩 +' + totalChunks + ' chunk</span><span class="bs-total">su ' + valid.length + ' file</span>';
+            resultEl.appendChild(summary);
+            setTimeout(() => { summary.style.opacity = '0.6'; }, 5000);
+        }
+    }
+
+    // ── Recent Imports ──
+
+    function saveRecentImport(name, chunks) {
+        let recent = JSON.parse(localStorage.getItem('kb_recent_imports') || '[]');
+        recent.unshift({ name, chunks, time: Date.now(), icon: fileIcon(name) });
+        if (recent.length > 8) recent = recent.slice(0, 8);
+        localStorage.setItem('kb_recent_imports', JSON.stringify(recent));
+    }
+
+    function renderRecentImports() {
+        const el = document.getElementById('recentImports');
+        const recent = JSON.parse(localStorage.getItem('kb_recent_imports') || '[]');
+        if (!recent.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+        el.style.display = 'block';
+        el.innerHTML = '<div class="ri-title" data-i18n="knowledge.import.recent">🕐 Importati di recente<button class="ri-clear" onclick="clearRecentImports()" title="Cancella cronologia">✕</button></div>' +
+            recent.slice(0, 5).map(r => {
+                const t = new Date(r.time);
+                const timeStr = t.toLocaleDateString() + ' ' + t.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+                return '<div class="ri-item"><span>' + (r.icon || '📄') + '</span><span>' + escHtml(r.name) + '</span><span class="ri-time">' + timeStr + '</span></div>';
+            }).join('');
+    }
+
+    function clearRecentImports() {
+        localStorage.removeItem('kb_recent_imports');
+        renderRecentImports();
+    }
+
+    // ── Recent URLs ──
+
+    function saveRecentUrl(url, title, chunks) {
+        let recent = JSON.parse(localStorage.getItem('kb_recent_urls') || '[]');
+        recent.unshift({ url, title: title || url, chunks, time: Date.now() });
+        if (recent.length > 6) recent = recent.slice(0, 6);
+        localStorage.setItem('kb_recent_urls', JSON.stringify(recent));
+        renderRecentUrls();
+    }
+
+    function renderRecentUrls() {
+        const el = document.getElementById('recentUrls');
+        const recent = JSON.parse(localStorage.getItem('kb_recent_urls') || '[]');
+        if (!recent.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+        el.style.display = 'block';
+        el.innerHTML = '<div class="ru-title">🌐 URL recenti</div>' +
+            recent.slice(0, 4).map(r => {
+                const t = new Date(r.time);
+                const timeStr = t.toLocaleDateString() + ' ' + t.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+                const display = (r.title || r.url).length > 40 ? (r.title || r.url).slice(0, 40) + '…' : (r.title || r.url);
+                return '<div class="ru-item" onclick="document.getElementById(\'urlInput\').value=\'' + escHtml(r.url) + '\';learnUrl()" title="' + escHtml(r.url) + '"><span>🌐</span><span>' + escHtml(display) + '</span><span class="ru-time">' + timeStr + '</span></div>';
+            }).join('');
+    }
+
+    async function learnUrl() {
+        const url = document.getElementById('urlInput').value.trim();
+        if (!url) return toast(__('common.error') + ': ' + __('knowledge.import.url_placeholder'), 'error');
+        document.getElementById('urlResult').innerHTML = '<span class="text-dim" style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;animation:kbPulse 1.4s infinite">⏳</span> ' + __('knowledge.import.downloading') + '</span>';
+        try {
+            const r = await api('/api/knowledge/from-url', {
+                method: 'POST',
+                body: JSON.stringify({ url }),
+            });
+            if (r.error) {
+                document.getElementById('urlResult').innerHTML = '<span class="error">❌ ' + escHtml(r.error) + '</span>';
+            } else {
+                document.getElementById('urlResult').innerHTML = `<span style="color:var(--green);font-weight:600">✅ ${escHtml(r.title || url)}</span><span style="color:var(--text-dim);font-size:0.75rem;margin-left:4px"> — ${r.chunks_added} chunk aggiunti</span>`;
+                saveRecentUrl(url, r.title, r.chunks_added || 0);
+                loadKB();
+            }
+        } catch(e) {
+            document.getElementById('urlResult').textContent = __('common.error') + ': ' + e.message;
+        }
+    }
+
+    // ── Search ──
+
+    async function searchKB() {
+        const query = document.getElementById('queryInput').value.trim();
+        if (!query) return;
+        const el = document.getElementById('kbResults');
+        el.innerHTML = '<span class="text-dim">' + __('common.loading') + '</span>';
+        const r = await api('/api/knowledge/query', {
+            method: 'POST',
+            body: JSON.stringify({ query }),
+        });
+        if (!r.results || r.results.length === 0) {
+            el.innerHTML = '<p class="text-dim">' + __('knowledge.search.no_results') + '</p>';
+            return;
+        }
+    let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;color:var(--text-dim);font-size:0.8rem">
+        <span>${r.results.length} ${__('knowledge.search.results')}</span>
+    </div>`;
+    for (const hit of r.results) {
+        const pct = Math.round((hit.score || 0) * 100);
+        const scoreColor = pct > 70 ? '#3fb950' : pct > 40 ? '#f0883e' : 'var(--text-dim)';
+        const srcName = hit.source ? hit.source.split('/').pop() || hit.source : '?';
+        const pctBarColor = pct > 70 ? '#3fb950' : pct > 40 ? '#f0883e' : '#8b949e';
+        html += `<div class="hit">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span class="kb-score-badge" style="background:${scoreColor}">${pct}%</span>
+                <span class="kb-src-tag">📄 ${escHtml(srcName)}</span>
+                <span style="margin-left:auto;font-size:0.7rem;color:var(--text-dim)">#${hit.chunk_id ?? ''}</span>
+            </div>
+            <div class="hit-text">${escHtml(hit.text.slice(0, 400))}${hit.text.length > 400 ? '...' : ''}</div>
+            <div class="kb-score-bar"><div class="kb-score-bar-fill" style="width:${pct}%;background:${pctBarColor}"></div></div>
+            <div class="hit-source text-dim text-xs" style="margin-top:5px">${escHtml(hit.source)}</div>
+        </div>`;
+    }
+    el.innerHTML = html;
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && document.activeElement === document.getElementById('queryInput')) searchKB();
+    });
+
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            const searchTab = document.querySelector('.tab[onclick*="kb-search"]');
+            if (searchTab) { searchTab.click(); }
+            else { document.getElementById('queryInput')?.focus(); }
+        }
+        if (e.key === 'Escape') {
+            const q = document.getElementById('queryInput');
+            if (document.activeElement === q) { q.value = ''; q.blur(); document.getElementById('kbResults').innerHTML = ''; }
+        }
+    });
+
+    // ── Knowledge Graph (vis-network) ──
+
+    let _network = null;
+    let _graphAllNodes = [];
+    let _graphAllEdges = [];
+    let _graphColorMap = {};
+
+    const GRAPH_COLORS = [
+        '#3fb950', '#58a6ff', '#d2a8ff', '#f0883e', '#ffd33d',
+        '#f85149', '#79c0ff', '#56d364', '#bc8cff', '#e3b341',
+        '#ff7b72', '#a5d6ff', '#7ee787', '#d2a8ff', '#c9d1d9',
+    ];
+
+    function assignGraphColors(nodes) {
+        const map = {};
+        let ci = 0;
+        for (const n of nodes) {
+            const key = n.group || n.source || '?';
+            if (!map[key]) map[key] = GRAPH_COLORS[ci++ % GRAPH_COLORS.length];
+        }
+        return map;
+    }
+
+    function buildGraphLegend(colorMap, nodes) {
+        const el = document.getElementById('graphLegend');
+        const groupCount = {};
+        const typeCount = {};
+        for (const n of nodes) {
+            const key = n.group || n.source || '?';
+            groupCount[key] = (groupCount[key] || 0) + 1;
+            const t = n.type || '?';
+            typeCount[t] = (typeCount[t] || 0) + 1;
+        }
+        const entries = Object.entries(colorMap);
+
+        if (entries.length === 0) {
+            el.innerHTML = '<span class="text-dim">' + __('knowledge.graph.no_groups') + '</span>';
+            document.getElementById('graphStats').innerHTML = '<span class="text-dim">' + __('knowledge.graph.zero_nodes') + '</span>';
+            return;
+        }
+
+        const typeLabels = {
+            '.py': __('knowledge.graph.type_python'), '.md': __('knowledge.graph.type_markdown'), '.txt': __('knowledge.graph.type_text'),
+            '.js': __('knowledge.graph.type_javascript'), '.html': __('knowledge.graph.type_html'), '.css': __('knowledge.graph.type_css'),
+            '.json': __('knowledge.graph.type_json'), '.yaml': __('knowledge.graph.type_yaml'), '.toml': __('knowledge.graph.type_toml'),
+            '.sh': __('knowledge.graph.type_shell'), '.go': __('knowledge.graph.type_go'), '.rs': __('knowledge.graph.type_rust'),
+            '.ts': __('knowledge.graph.type_typescript'), '.url': __('knowledge.graph.type_web'), '.xml': __('knowledge.graph.type_xml'),
+            '.pyc': __('knowledge.graph.type_bytecode'),
+        };
+        const knownTypes = Object.keys(typeCount).filter(t => t !== '?').sort();
+        const typeHtml = knownTypes.length > 0 ? `
+            <div class="g-legend-type">
+                ${knownTypes.map(t => {
+                    const label = typeLabels[t] || t.slice(1).toUpperCase() || t;
+                    const pct = Math.round(typeCount[t] / nodes.length * 100);
+                    return `<span class="g-type-badge" title="${__('knowledge.graph.type_count', {n: typeCount[t], pct})}" onclick="filterByType('${escHtml(t)}')">${label} ${typeCount[t]}</span>`;
+                }).join('')}
+            </div>` : '';
+
+        const edgeWeight = _graphAllEdges.length > 0
+            ? Math.max(..._graphAllEdges.map(e => e.weight || 1)) : 1;
+
+        el.innerHTML = `
+            <details open>
+                <summary style="cursor:pointer;font-size:0.75rem;font-weight:600;color:var(--text-dim);margin-bottom:4px;user-select:none">
+                    ${__('knowledge.graph.legend_groups', {n: entries.length})}
+                </summary>
+                <div style="margin-bottom:6px">${entries.map(([group, color]) =>
+                    `                        <div class="g-item" onclick="filterByGroup('${escHtml(group)}')" title="${__('knowledge.graph.legend_hint')}">
+                        <span class="g-dot" style="background:${color}"></span>
+                        <span class="g-label">${escHtml(group)}</span>
+                        <span class="g-count">${groupCount[group] || 0}</span>
+                    </div>`
+                ).join('')}</div>
+            </details>
+            ${knownTypes.length > 0 ? `
+            <details open>
+                <summary style="cursor:pointer;font-size:0.75rem;font-weight:600;color:var(--text-dim);margin-bottom:4px;user-select:none">
+                    ${__('knowledge.graph.legend_types')}
+                </summary>
+                ${typeHtml}
+            </details>` : ''}
+            <details open>
+                <summary style="cursor:pointer;font-size:0.75rem;font-weight:600;color:var(--text-dim);margin-bottom:4px;user-select:none">
+                    ${__('knowledge.graph.legend_edges')}
+                </summary>
+                <div style="padding:2px 4px">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:0.7rem;color:var(--text-dim)">
+                        <span style="display:inline-block;width:20px;height:2px;background:#30363d;border-radius:1px;flex-shrink:0"></span>
+                        <span>${__('knowledge.graph.edge_weak')}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:0.7rem;color:var(--text-dim)">
+                        <span style="display:inline-block;width:20px;height:2px;background:#58a6ff;border-radius:1px;flex-shrink:0"></span>
+                        <span>${__('knowledge.graph.edge_strong')}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;font-size:0.7rem;color:var(--text-dim)">
+                        <span style="display:inline-flex;align-items:center;gap:2px;flex-shrink:0">
+                            <span style="display:inline-block;width:20px;height:2px;background:#58a6ff;border-radius:1px"></span>
+                            <span style="display:inline-block;width:20px;height:3px;background:#58a6ff;border-radius:1px"></span>
+                        </span>
+                        <span>${__('knowledge.graph.edge_thickness')}</span>
+                    </div>
+                </div>
+            </details>
+            <details open>
+                <summary style="cursor:pointer;font-size:0.75rem;font-weight:600;color:var(--text-dim);margin-bottom:4px;user-select:none">
+                    ${__('knowledge.graph.legend_nodes')}
+                </summary>
+                <div style="padding:2px 4px;font-size:0.7rem;color:var(--text-dim);display:flex;flex-direction:column;gap:3px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#58a6ff;opacity:0.5;flex-shrink:0"></span>
+                        <span>${__('knowledge.graph.node_weak')}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#58a6ff;opacity:0.8;flex-shrink:0"></span>
+                        <span>${__('knowledge.graph.node_hub')}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;margin-top:2px;color:var(--text-dim)">
+                        <span style="font-size:0.6rem;border:1px solid var(--border);border-radius:3px;padding:0 4px">⇱</span>
+                        <span>${__('knowledge.graph.dblclick_hint')}</span>
+                    </div>
+                </div>
+            </details>
+        `;
+
+        document.getElementById('graphStats').innerHTML =
+            `<span class="text-dim">${__('knowledge.graph.stats', {nodes: nodes.length, edges: _graphAllEdges.length, types: knownTypes.length})}</span>`;
+    }
+
+    function filterByType(type) {
+        if (!_network) return;
+        const matched = _graphAllNodes.filter(n => (n.type || '') === type).map(n => n.id);
+        if (matched.length > 0) {
+            _network.selectNodes(matched);
+            _network.fit({ nodes: matched, animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+        }
+    }
+
+    async function renderKnowledgeGraph() {
+        const container = document.getElementById('knowledgeGraph');
+        container.innerHTML = '<div style="text-align:center;padding:240px 0;color:var(--text-dim)"><span style="display:inline-block;animation:kbPulse 1.4s infinite">⏳</span> ' + __('knowledge.graph.loading') + '</div>';
+
+        if (typeof vis === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
+            await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = reject; document.head.appendChild(script); });
+        }
+
+        try {
+            const g = await api('/api/knowledge/graph');
+            _graphAllNodes = g.nodes || [];
+            _graphAllEdges = g.edges || [];
+
+            if (_graphAllNodes.length === 0) {
+                container.innerHTML = '<div class="text-dim" style="text-align:center;padding:240px 0">' + __('knowledge.graph.empty') + '</div>';
+                document.getElementById('graphLegend').innerHTML = '';
+                document.getElementById('graphStats').innerHTML = '<span class="text-dim">' + __('knowledge.graph.zero_nodes') + '</span>';
+                document.getElementById('graphInfo').textContent = '';
+                return;
+            }
+
+            const maxNodes = 300;
+            const usedNodes = _graphAllNodes.slice(0, maxNodes);
+            const usedIds = new Set(usedNodes.map(n => n.id));
+            const usedEdges = _graphAllEdges.filter(e => usedIds.has(e.source) && usedIds.has(e.target));
+
+            _graphColorMap = assignGraphColors(usedNodes);
+            buildGraphLegend(_graphColorMap, usedNodes);
+
+            document.getElementById('graphInfo').textContent =
+                __('knowledge.graph.stats', {nodes: _graphAllNodes.length, edges: _graphAllEdges.length, types: Object.keys(_graphAllNodes.reduce((acc, n) => { acc[n.type] = true; return acc; }, {})).length}) + ` · shown ${usedNodes.length}`;
+
+            const visNodes = usedNodes.map((n, i) => {
+                const groupKey = n.group || n.source || '?';
+                const color = _graphColorMap[groupKey] || '#58a6ff';
+                const textPreview = (n.text || '').slice(0, 100);
+                const tooltip = `<strong>${escHtml(n.label || n.id)}</strong>` +
+                    `<br><small>${escHtml(n.source || '-')} · chunk #${n.chunk_id ?? i}</small>` +
+                    (textPreview ? `<br><br><span style="color:#8b949e">${escHtml(textPreview)}${textPreview.length >= 100 ? '…' : ''}</span>` : '');
+                return {
+                    id: n.id,
+                    label: (n.label || n.id).slice(0, 28),
+                    title: tooltip,
+                    color: { background: color, border: '#fff3', highlight: { background: color, border: '#fff' } },
+                    borderWidth: 1,
+                    borderWidthSelected: 2,
+                    size: 6 + Math.min(Math.max(n.edges || 0, 1), 15),
+                    font: { color: '#8b949e', size: 9, strokeWidth: 0, face: 'monospace' },
+                    group: groupKey,
+                };
+            });
+
+            const visEdges = usedEdges.map(e => ({
+                from: e.source,
+                to: e.target,
+                color: {
+                    color: e.weight > 2 ? '#58a6ff' : '#30363d',
+                    opacity: Math.min(0.2 + (e.weight || 1) * 0.1, 0.7),
+                    highlight: '#58a6ff',
+                },
+                width: Math.min((e.weight || 1) * 0.5, 2.5),
+                title: e.label || '',
+                smooth: { type: 'continuous', roundness: 0.2 },
+            }));
+
+            const layoutMode = document.getElementById('graphLayout').value;
+            const options = {
+                nodes: { shape: 'dot', scaling: { min: 5, max: 25 } },
+                edges: { smooth: { type: 'continuous' } },
+                physics: layoutMode === 'force' ? {
+                    solver: 'barnesHut',
+                    barnesHut: { gravitationalConstant: -4000, springConstant: 0.003, springLength: 150, damping: 0.09 },
+                    stabilization: { iterations: 150, updateInterval: 50 },
+                } : false,
+                layout: layoutMode === 'hierarchical' ? {
+                    hierarchical: { direction: 'UD', sortMethod: 'directed', nodeSpacing: 140, levelSeparation: 180, treeSpacing: 120 }
+                } : layoutMode === 'radial' ? {
+                    hierarchical: { direction: 'UD', sortMethod: 'hubsize', nodeSpacing: 120, levelSeparation: 150 }
+                } : {},
+                interaction: {
+                    hover: true,
+                    tooltipDelay: 150,
+                    navigationButtons: true,
+                    keyboard: { enabled: true, bindToWindow: false },
+                    zoomView: true,
+                    dragView: true,
+                },
+                manipulation: { enabled: false },
+            };
+
+            container.innerHTML = '';
+            const data = { nodes: new vis.DataSet(visNodes), edges: new vis.DataSet(visEdges) };
+            _network = new vis.Network(container, data, options);
+
+            _network.on('click', function(params) {
+                if (params.nodes.length) {
+                    const nodeId = params.nodes[0];
+                    const node = usedNodes.find(n => n.id === nodeId);
+                    if (node) showGraphNodeInfo(node);
+                } else {
+                    document.getElementById('graphNodeInfo').style.display = 'none';
+                }
+            });
+
+            _network.on('doubleClick', function(params) {
+                if (params.nodes.length) {
+                    const nodeId = params.nodes[0];
+                    _network.focus(nodeId, { scale: 2.5, animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+                }
+            });
+
+            _network.on('stabilizationIterationsDone', function() {
+                _network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+            });
+
+        } catch(e) {
+            container.innerHTML = '<div class="error" style="text-align:center;padding:240px 0">' + __('knowledge.graph.render_error') + ': ' + e.message + '</div>';
+        }
+    }
+
+    function showGraphNodeInfo(node) {
+        const info = document.getElementById('graphNodeInfo');
+        info.style.display = 'block';
+        const textPreview = (node.text || '').slice(0, 250);
+        info.innerHTML = `<div class="ni-header">
+            <span class="ni-title">${escHtml(node.label || node.id)}</span>
+            <button class="btn btn-sm" onclick="this.parentElement.parentElement.style.display='none'" style="background:transparent;border:none;color:var(--text-dim);cursor:pointer;font-size:1rem">&times;</button>
+        </div>
+        <div class="ni-meta">
+            <span>📁 ${escHtml(node.source || '-')}</span>
+            <span>#${node.chunk_id ?? 0}</span>
+            <span class="kb-type-tag">${escHtml(node.type || '-')}</span>
+        </div>
+        ${textPreview ? `<div class="ni-preview">${escHtml(textPreview)}${node.text.length > 250 ? '…' : ''}</div>` : ''}
+        <div class="ni-actions">
+            <button class="btn btn-sm" onclick="filterByGroup('${escHtml(node.group || node.source || '')}')">${__('knowledge.graph.legend')}</button>
+            <button class="btn btn-sm" onclick="resetGraphView()">${__('knowledge.graph.fit')}</button>
+        </div>`;
+    }
+
+    function filterByGroup(group) {
+        if (!_network) return;
+        document.getElementById('graphFilter').value = group;
+        filterGraphNodes();
+    }
+
+    function filterGraphNodes() {
+        if (!_network) return;
+        const q = document.getElementById('graphFilter').value.trim().toLowerCase();
+        const allIds = new Set(_graphAllNodes.map(n => n.id));
+        if (!q) {
+            _network.selectNodes([]);
+            _network.setSelection({ nodes: [] });
+            return;
+        }
+        const matched = _graphAllNodes
+            .filter(n => (n.group || n.source || '').toLowerCase().includes(q))
+            .map(n => n.id);
+        if (matched.length > 0) {
+            _network.selectNodes(matched);
+            _network.fit({ nodes: matched, animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+        }
+    }
+
+    function resetGraphView() {
+        if (!_network) return;
+        _network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+        _network.selectNodes([]);
+        document.getElementById('graphFilter').value = '';
+    }
+
+    function zoomGraphIn() {
+        if (!_network) return;
+        const scale = _network.getScale();
+        _network.moveTo({ scale: scale * 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } });
+    }
+
+    function zoomGraphOut() {
+        if (!_network) return;
+        const scale = _network.getScale();
+        _network.moveTo({ scale: scale / 1.3, animation: { duration: 200, easingFunction: 'easeInOutQuad' } });
+    }
+
+    function exportGraphPNG() {
+        if (!_network) return;
+        const canvas = document.querySelector('#knowledgeGraph canvas');
+        if (!canvas) return;
+        const link = document.createElement('a');
+        link.download = 'knowledge-graph.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
+    // ── LLM Wiki ──
+
+    async function loadWiki() {
+        try {
+            const pages = await api('/api/wiki');
+            const el = document.getElementById('wikiList');
+            if (!pages || pages.length === 0) {
+                el.innerHTML = '<div class="text-dim" style="text-align:center;padding:30px">' + __('knowledge.wiki.empty') + '</div>';
+                return;
+            }
+            el.innerHTML = pages.map(p => {
+                const sizeStr = p.size > 1024 ? (p.size / 1024).toFixed(1) + ' KB' : p.size + ' B';
+                return `<div class="wiki-card" onclick="viewWikiPage('${escHtml(p.slug)}')">
+                    <h4>📄 ${escHtml(p.title)}</h4>
+                    <div class="meta">
+                        <span class="meta-badge">📏 ${sizeStr}</span>
+                        <span class="meta-badge">🔗 ${escHtml(p.slug)}</span>
+                        ${p.chunks ? `<span class="meta-badge">🧩 ${p.chunks} chunk</span>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            document.getElementById('wikiList').innerHTML = '<div class="text-dim">' + __('common.error') + ': ' + e.message + '</div>';
+        }
+    }
+
+    async function viewWikiPage(slug) {
+        try {
+            const page = await api('/api/wiki/' + slug);
+            const el = document.getElementById('wikiList');
+            el.innerHTML = `<div class="card">
+                <div class="flex-between mb-4">
+                    <h3 style="margin:0">📖 ${slug}</h3>
+                    <button class="btn btn-sm" onclick="loadWiki()">${__('knowledge.wiki.back')}</button>
+                </div>
+                <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.9rem;line-height:1.6">${escHtml(page.content)}</pre>
+            </div>`;
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function suggestTopics() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '⏳';
+        try {
+            const topics = await api('/api/wiki/suggest');
+            const container = document.getElementById('suggestedTopics');
+            const chips = document.getElementById('topicChips');
+            if (!topics || topics.length === 0) {
+                chips.innerHTML = '<span class="text-dim">' + __('knowledge.wiki.no_suggestions') + '</span>';
+            } else {
+                chips.innerHTML = topics.map(t =>
+                    `<span class="topic-chip" onclick="generateWiki('${escHtml(t.word)}')">${escHtml(t.word)} (${t.frequency})</span>`
+                ).join('');
+            }
+            container.style.display = 'block';
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+
+        btn.disabled = false;
+        btn.textContent = __('knowledge.wiki.suggest');
+    }
+
+    async function generateWiki(topic) {
+        try {
+            const r = await api('/api/wiki/generate', {
+                method: 'POST',
+                body: JSON.stringify({ topic }),
+            });
+            toast(__('knowledge.wiki.created', {topic}), 'success');
+            loadWiki();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    // ── Shared formatting ───────────────────────────────────────
+
+    function fmtContent(text) {
+        text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+            const trimmed = code.trim();
+            const langLabel = lang ? `<span class="lang-label">${escHtml(lang)}</span>` : '';
+            return `<div class="code-block-wrap">
+                <div class="code-pane">
+                    <div class="code-block-bar">${langLabel}<button onclick="copyText('${escHtml(trimmed)}')" title="${__('knowledge.common.copy_code')}">📋</button></div>
+                    <pre><code>${escHtml(trimmed)}</code></pre>
+                </div>
+            </div>`;
+        });
+        text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+        text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        text = text.replace(/\n\n/g, '</p><p>');
+        text = text.replace(/\n/g, '<br>');
+        text = '<p>' + text + '</p>';
+        return text;
+    }
+
+    function copyText(text) {
+        navigator.clipboard.writeText(text).then(() => toast(__('knowledge.common.copied'), 'success')).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+            toast(__('knowledge.common.copied'), 'success');
+        });
+    }
+
+    // ── Notebook Chat (KB-grounded Q&A) ──────────────────────────
+
+    let _nbMessages = [];
+
+    function nbTimestamp() {
+        const d = new Date();
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function nbSend() {
+        const inp = document.getElementById('nbInput');
+        const query = inp.value.trim();
+        if (!query) return;
+
+        const btn = document.getElementById('nbSendBtn');
+        btn.disabled = true;
+        inp.disabled = true;
+
+        document.getElementById('nbEmpty').style.display = 'none';
+        const ts = nbTimestamp();
+
+        // Add user message
+        const userDiv = document.createElement('div');
+        userDiv.className = 'nb-msg user';
+        userDiv.innerHTML = '<div class="nb-content">' + escHtml(query) + '</div><div class="nb-timestamp">' + ts + '</div>';
+        document.getElementById('nbMsgs').appendChild(userDiv);
+
+        // Add loading indicator
+        const loading = document.createElement('div');
+        loading.className = 'nb-loading';
+        loading.id = 'nbLoading';
+        loading.innerHTML = '<div class="dots"><span></span><span></span><span></span></div> ' + __('knowledge.notebook.searching');
+        document.getElementById('nbMsgs').appendChild(loading);
+        scrollNb();
+
+        inp.value = '';
+
+        try {
+            const r = await api('/api/knowledge/notebook', {
+                method: 'POST',
+                body: JSON.stringify({ query }),
+            });
+
+            // Remove loading
+            const l = document.getElementById('nbLoading');
+            if (l) l.remove();
+
+            if (r.error) {
+                toast(__('common.error') + ': ' + r.error, 'error');
+                return;
+            }
+
+            // Build sources HTML
+            let sourcesHtml = '';
+            if (r.sources && r.sources.length > 0) {
+                sourcesHtml = '<div class="nb-sources"><strong>' + __('knowledge.notebook.sources') + '</strong>';
+                const seen = new Set();
+                for (const s of r.sources) {
+                    const label = s.source || '?';
+                    if (seen.has(label)) continue;
+                    seen.add(label);
+                    sourcesHtml += `<div class="nb-src"><span class="src-score">${Math.round((s.score||0)*100)}%</span> ${escHtml(label)}</div>`;
+                }
+                sourcesHtml += '</div>';
+            }
+
+            // Add assistant message
+            const resp = r.response || __('knowledge.notebook.no_response');
+            const respDiv = document.createElement('div');
+            respDiv.className = 'nb-msg assistant';
+            respDiv.innerHTML = '<div class="nb-content">' + fmtContent(resp) + '</div>' + sourcesHtml + '<div class="nb-timestamp">' + nbTimestamp() + '</div>';
+            document.getElementById('nbMsgs').appendChild(respDiv);
+
+            _nbMessages.push({ role: 'user', content: query });
+            _nbMessages.push({ role: 'assistant', content: resp });
+
+        } catch(e) {
+            const l = document.getElementById('nbLoading');
+            if (l) l.remove();
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+
+        btn.disabled = false;
+        inp.disabled = false;
+        inp.focus();
+        scrollNb();
+    }
+
+    function scrollNb() {
+        const container = document.getElementById('nbMsgs');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function nbClear() {
+        if (_nbMessages.length === 0) return;
+        if (!confirm(__('knowledge.notebook.confirm_clear'))) return;
+        _nbMessages = [];
+        document.getElementById('nbMsgs').innerHTML = '';
+        document.getElementById('nbEmpty').style.display = 'block';
+    }
+
+    // ── Briefing ─────────────────────────────────────────────────
+
+    async function generateBriefing() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = __('knowledge.notebook.briefing_loading');
+
+        const msgs = document.getElementById('nbMsgs');
+        // Add loading indicator
+        const loading = document.createElement('div');
+        loading.className = 'nb-loading';
+        loading.id = 'nbBriefLoading';
+        loading.innerHTML = '<div class="dots"><span></span><span></span><span></span></div> ' + __('knowledge.notebook.briefing_generating');
+        msgs.appendChild(loading);
+        scrollNb();
+
+        try {
+            const r = await api('/api/knowledge/briefing', {
+                method: 'POST',
+                body: JSON.stringify({}),
+            });
+
+            const l = document.getElementById('nbBriefLoading');
+            if (l) l.remove();
+
+            if (r.error) {
+                toast(__('common.error') + ': ' + r.error, 'error');
+                return;
+            }
+
+            const div = document.createElement('div');
+            div.className = 'nb-msg assistant';
+            div.innerHTML = '<div class="nb-content">' + fmtContent(r.briefing || __('knowledge.notebook.briefing_none')) + '</div>';
+            msgs.appendChild(div);
+            scrollNb();
+            toast(__('knowledge.notebook.briefing_done', {tokens: r.tokens}), 'success');
+        } catch(e) {
+            const l = document.getElementById('nbBriefLoading');
+            if (l) l.remove();
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+
+        btn.disabled = false;
+        btn.textContent = __('knowledge.notebook.generate_briefing');
+    }
+
+    // Initial graph render — load vis-network first, then render
+    setTimeout(async () => {
+        const graphEl = document.getElementById('knowledgeGraph');
+        graphEl.innerHTML = '<div style="text-align:center;padding:240px 0;color:var(--text-dim)"><span style="display:inline-block;animation:kbPulse 1.4s infinite">⏳</span> <span data-i18n="knowledge.graph.loading">Caricamento grafo...</span></div>';
+        if (typeof vis === 'undefined') {
+            const s = document.createElement('script');
+            s.src = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
+            const loaded = await new Promise(r => { s.onload = () => r(true); s.onerror = () => r(false); document.head.appendChild(s); });
+            if (!loaded) {
+                graphEl.innerHTML = '<div style="text-align:center;padding:240px 0;color:var(--text-dim)">❌ <span data-i18n="knowledge.graph.load_error">Errore caricamento vis-network. Verifica la connessione Internet.</span></div>';
+                return;
+            }
+        }
+        renderKnowledgeGraph();
+    }, 300);
+
+    browseDir('/');
+    loadKB();
+    renderRecentImports();
+    renderRecentUrls();
+</script>
+{% endblock %}

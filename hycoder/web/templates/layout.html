@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI+ — {% block title %}Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="/static/i18n.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0d1117; --surface: #161b22; --border: #30363d; --bg-dim: #0d1117;
+            --text: #c9d1d9; --text-dim: #8b949e;
+            --green: #3fb950; --blue: #58a6ff; --purple: #d2a8ff;
+            --orange: #f0883e; --yellow: #ffd33d; --red: #f85149;
+        }
+        :root.light {
+            --bg: #ffffff; --surface: #f6f8fa; --border: #d0d7de; --bg-dim: #f0f2f5;
+            --text: #1f2328; --text-dim: #656d76;
+            --green: #1a7f37; --blue: #0969da; --purple: #8250df;
+            --orange: #bd561d; --yellow: #9a6700; --red: #cf222e;
+        }
+        *, *::before, *::after { transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease; }
+        html, body { height: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg); color: var(--text); display: flex;
+        }
+        a { color: var(--blue); text-decoration: none; }
+        .sidebar {
+            width: 220px; min-width: 220px; background: var(--surface);
+            border-right: 1px solid var(--border); display: flex;
+            flex-direction: column; height: 100vh; position: sticky; top: 0;
+        }
+        .sidebar h1 {
+            padding: 22px 16px; font-size: 1.1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        @keyframes logoPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.06); opacity: 0.85; }
+        }
+        @keyframes logoGlow {
+            0%, 100% { filter: drop-shadow(0 0 8px rgba(255,45,120,0.3)) drop-shadow(0 0 20px rgba(0,212,255,0.2)); }
+            50% { filter: drop-shadow(0 0 18px rgba(255,45,120,0.6)) drop-shadow(0 0 35px rgba(0,212,255,0.4)); }
+        }
+        @keyframes logoSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes orbitA {
+            0% { transform: rotate(0deg) translateX(50px) rotate(0deg); }
+            100% { transform: rotate(360deg) translateX(50px) rotate(-360deg); }
+        }
+        @keyframes orbitB {
+            0% { transform: rotate(180deg) translateX(50px) rotate(-180deg); }
+            100% { transform: rotate(540deg) translateX(50px) rotate(-540deg); }
+        }
+        @keyframes ringDash {
+            0% { stroke-dashoffset: 314; }
+            100% { stroke-dashoffset: 0; }
+        }
+        .logo-svg { animation: logoGlow 3s ease-in-out infinite; }
+        .logo-svg .ring-main { animation: ringDash 8s linear infinite; }
+        .logo-svg .orbit-a { animation: orbitA 6s linear infinite; transform-origin: 60px 60px; }
+        .logo-svg .orbit-b { animation: orbitB 6s linear infinite; transform-origin: 60px 60px; }
+        .logo-plus { animation: logoSpin 4s linear infinite; transform-origin: 100px 18px; }
+        .sidebar h1 small { display: block; font-size: 0.7rem; color: var(--text-dim); -webkit-text-fill-color: var(--text-dim); }
+        .nav { flex: 1; padding: 8px; }
+        .nav a {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; border-radius: 6px; color: var(--text-dim);
+            font-size: 0.9rem; transition: all 0.15s;
+        }
+        .nav a:hover { background: rgba(255,255,255,0.05); color: var(--text); text-decoration: none; }
+        .nav a.active { background: rgba(88,166,255,0.1); color: var(--blue); }
+        .sidebar-footer {
+            padding: 12px 16px; border-top: 1px solid var(--border);
+            font-size: 0.75rem; color: var(--text-dim);
+        }
+        .sidebar-author { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+        .sidebar-author .author-avatar { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg,#3fb950,#58a6ff); display: inline-flex; align-items: center; justify-content: center; font-size: 0.55rem; color: #fff; font-weight: 700; flex-shrink: 0; }
+        .sidebar-author .author-name { color: var(--text); font-weight: 600; font-size: 0.75rem; }
+        .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; }
+        .dot.green { background: var(--green); }
+        .dot.red { background: var(--red); }
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .main header {
+            padding: 16px 24px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--surface);
+        }
+        .main header h2 { font-size: 1.1rem; }
+        .main-body { flex: 1; overflow-y: auto; padding: 24px; }
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 20px; margin-bottom: 16px;
+        }
+        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        .stat-value { font-size: 1.8rem; font-weight: 700; }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border-radius: 6px; font-size: 0.85rem;
+            cursor: pointer; border: 1px solid var(--border);
+            background: #21262d; color: var(--text); transition: all 0.15s;
+        }
+        .btn:hover { background: #30363d; }
+        .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-danger { border-color: var(--red); color: var(--red); }
+        .btn-danger:hover { background: rgba(248,81,73,0.1); }
+        .btn-sm { padding: 4px 10px; font-size: 0.8rem; }
+        .btn-xs { padding: 2px 8px; font-size: 0.7rem; }
+        input, textarea, select {
+            width: 100%; padding: 10px 12px; background: #0d1117;
+            border: 1px solid var(--border); border-radius: 6px;
+            color: var(--text); font-size: 0.9rem; font-family: inherit;
+            outline: none; transition: border-color 0.15s;
+        }
+        input:focus, textarea:focus, select:focus { border-color: var(--blue); }
+        textarea { resize: vertical; min-height: 80px; font-family: 'SF Mono', monospace; }
+        label { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 4px; display: block; }
+        .form-group { margin-bottom: 16px; }
+        .flex { display: flex; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .gap-2 { gap: 8px; }
+        .gap-4 { gap: 16px; }
+        .mt-2 { margin-top: 8px; }
+        .mt-4 { margin-top: 16px; }
+        .mb-4 { margin-bottom: 16px; }
+        .text-dim { color: var(--text-dim); }
+        .text-sm { font-size: 0.85rem; }
+        .mono { font-family: 'SF Mono', monospace; font-size: 0.85rem; }
+        .hidden { display: none !important; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; text-transform: uppercase; font-size: 0.75rem; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .badge-green { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid var(--green); padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; }
+        .badge-blue { background: rgba(88,166,255,0.15); color: var(--blue); border: 1px solid var(--blue); padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; }
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 2000; }
+        .toast { padding: 12px 20px; border-radius: 8px; font-size: 0.85rem; background: var(--surface); border: 1px solid var(--border); margin-top: 8px; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .modal-overlay.open { opacity: 1; pointer-events: all; }
+        .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 90%; max-width: 540px; max-height: 80vh; overflow-y: auto; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
+        .msg { padding: 12px 16px; border-radius: 8px; max-width: 85%; animation: fadeIn 0.25s ease; line-height: 1.5; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .msg.user { background: #1f6feb; color: #fff; align-self: flex-end; }
+        .msg.local { background: #0d3a1e; border: 1px solid var(--green); align-self: flex-start; }
+        .msg.online { background: #0c2d5e; border: 1px solid var(--blue); align-self: flex-start; }
+        .msg .meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; }
+        @media (max-width: 700px) { .sidebar { width: 56px; min-width: 56px; } .sidebar h1 { font-size: 0; padding: 16px 8px; } .sidebar h1 small { display: none; } .nav a { justify-content: center; padding: 10px; } .nav a span.nav-text { display: none; } }
+    </style>
+    <script>
+        function toast(msg, type = 'info') {
+            const c = document.getElementById('toastContainer');
+            if (!c) { setTimeout(() => toast(msg, type), 100); return; }
+            const t = document.createElement('div');
+            t.className = 'toast ' + type;
+            t.textContent = msg;
+            c.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+        }
+        async function api(url, opts = {}) {
+            const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+            if (!res.ok) { const e = await res.json().catch(() => ({error: res.statusText})); throw new Error(e.error || res.statusText); }
+            return res.json();
+        }
+        function escHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s ?? '';
+            return d.innerHTML;
+        }
+    </script>
+</head>
+<body>
+    <nav class="sidebar">
+        <h1 style="display:flex;align-items:center;gap:12px;padding-top:16px;padding-bottom:16px">
+          <svg class="logo-svg" width="64" height="64" viewBox="0 0 120 120" style="flex-shrink:0">
+            <defs>
+              <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#ff2d78"/>
+                <stop offset="33%" stop-color="#bf5af2"/>
+                <stop offset="66%" stop-color="#00d4ff"/>
+                <stop offset="100%" stop-color="#3fb950"/>
+              </linearGradient>
+              <linearGradient id="logoGrad2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="100%" stop-color="#c8e6ff"/>
+              </linearGradient>
+              <linearGradient id="plusGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#ffd33d"/>
+                <stop offset="100%" stop-color="#ff7b00"/>
+              </linearGradient>
+            </defs>
+            <circle cx="60" cy="60" r="54" fill="none" stroke="url(#logoGrad)" stroke-width="1.5" opacity="0.12"/>
+            <circle class="ring-main" cx="60" cy="60" r="50" fill="none" stroke="url(#logoGrad)" stroke-width="7" stroke-dasharray="282" stroke-dashoffset="70" stroke-linecap="round" transform="rotate(-90 60 60)"/>
+            <circle cx="60" cy="60" r="42" fill="none" stroke="url(#logoGrad)" stroke-width="1.5" opacity="0.25"/>
+            <circle class="orbit-a" cx="60" cy="60" r="3" fill="#00d4ff" opacity="0.8"/>
+            <circle class="orbit-b" cx="60" cy="60" r="2.5" fill="#ff2d78" opacity="0.8"/>
+            <text x="58" y="68" text-anchor="middle" font-size="48" font-weight="900" fill="url(#logoGrad2)" font-family="system-ui, -apple-system, sans-serif" letter-spacing="-1">AI</text>
+            <rect class="logo-plus" x="86" y="6" width="28" height="28" rx="7" fill="url(#plusGrad)"/>
+            <text x="100" y="26" text-anchor="middle" font-size="20" font-weight="900" fill="#0d1117" font-family="system-ui, -apple-system, sans-serif">+</text>
+          </svg>
+          <span style="font-size:1.5rem;font-weight:800;background:linear-gradient(135deg,#ff2d78,#bf5af2,#00d4ff,#3fb950);background-size:200% 200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:logoGlow 3s ease-in-out infinite">AI+</span>
+        </h1>
+        <div class="nav">
+            <a href="/chat" class="{% if active_page == 'chat' %}active{% endif %}" title="Chat" data-i18n-title="nav.chat">💬 <span class="nav-text" data-i18n="nav.chat">Chat</span></a>
+            <a href="/dashboard" class="{% if active_page == 'dashboard' %}active{% endif %}" title="Dashboard" data-i18n-title="nav.dashboard">📈 <span class="nav-text" data-i18n="nav.dashboard">Dashboard</span></a>
+            <a href="/notes" class="{% if active_page == 'notes' %}active{% endif %}" title="Notes" data-i18n-title="nav.notes">📓 <span class="nav-text" data-i18n="nav.notes">Notes</span></a>
+            <a href="/knowledge" class="{% if active_page == 'knowledge' %}active{% endif %}" title="Knowledge Base" data-i18n-title="nav.knowledge">🧠 <span class="nav-text" data-i18n="nav.knowledge">Knowledge</span></a>
+            <a href="/skills" class="{% if active_page == 'skills' %}active{% endif %}" title="Skills" data-i18n-title="nav.skills">⚡ <span class="nav-text" data-i18n="nav.skills">Skills</span></a>
+            <a href="/agents" class="{% if active_page == 'agents' %}active{% endif %}" title="Agents" data-i18n-title="nav.agents">🎭 <span class="nav-text" data-i18n="nav.agents">Agents</span></a>
+            <a href="/projects" class="{% if active_page == 'projects' %}active{% endif %}" title="Projects" data-i18n-title="nav.projects">🏗️ <span class="nav-text" data-i18n="nav.projects">Projects</span></a>
+            <a href="/commands" class="{% if active_page == 'commands' %}active{% endif %}" title="Quick Commands" data-i18n-title="nav.commands">⌨️ <span class="nav-text" data-i18n="nav.commands">Commands</span></a>
+            <a href="/prompts" class="{% if active_page == 'prompts' %}active{% endif %}" title="Prompt Templates" data-i18n-title="nav.prompts">🎨 <span class="nav-text" data-i18n="nav.prompts">Prompts</span></a>
+            <a href="/workspace" class="{% if active_page == 'workspace' %}active{% endif %}" title="Workspace" data-i18n-title="nav.workspace">🖥️ <span class="nav-text" data-i18n="nav.workspace">Workspace</span></a>
+            <a href="/settings" class="{% if active_page == 'settings' %}active{% endif %}" title="Settings" data-i18n-title="nav.settings">🔧 <span class="nav-text" data-i18n="nav.settings">Settings</span></a>
+            <a href="/profile" class="{% if active_page == 'profile' %}active{% endif %}" style="font-size:0.82rem" title="Login">🔐 <span class="nav-text">Login</span></a>
+            <div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px">
+                <a href="/help" class="{% if active_page == 'help' %}active{% endif %}" style="font-size:0.82rem" title="Help" data-i18n-title="nav.help">📖 <span class="nav-text" data-i18n="nav.help">How it works</span></a>
+            </div>
+        </div>
+        <div class="sidebar-footer">
+            <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+                <div><span class="dot" id="localeDot"></span><span id="localeLabel">...</span> · <span id="localeModel">-</span></div>
+                <button id="themeToggle" onclick="toggleTheme()" title="Cambia tema" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px 4px;border-radius:4px;color:var(--text-dim);transition:color 0.15s">🌙</button>
+            </div>
+            <div><span class="dot" id="onlineDot"></span><span id="onlineLabel">...</span> · <span id="onlineModel">-</span></div>
+            <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:0.7rem;color:var(--text-dim);line-height:1.5">
+                <div id="sidebarClock">
+                    <div id="sidebarDate" style="font-weight:500">-</div>
+                    <div id="sidebarTime" style="font-variant-numeric:tabular-nums">-</div>
+                </div>
+            </div>
+            <div id="sidebarUserLine" style="display:none;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:0.75rem;color:var(--text-dim);text-align:center">👤 <span id="sidebarUserName">-</span></div>
+        </div>
+    </nav>
+    <div class="main">
+        <header>
+            <h2 id="pageHeading">{% block heading %}AI+{% endblock %}</h2>
+            <div class="text-sm text-dim" id="headerStats">0 token · 0s</div>
+        </header>
+        <div class="main-body">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ── J.A.R.V.I.S. Voice Assistant ────────────────────────── -->
+    <style>
+        /* Floating button */
+        #jarvis-fab {
+            position: fixed; bottom: 24px; right: 24px; z-index: 1999;
+            width: 56px; height: 56px; border-radius: 50%;
+            background: linear-gradient(135deg, #58a6ff, #3fb950);
+            border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 20px rgba(88,166,255,0.4); transition: all 0.3s ease;
+            font-size: 1.4rem;
+        }
+        #jarvis-fab:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(88,166,255,0.5); }
+        #jarvis-fab.listening { animation: jarvis-pulse 1.5s ease-in-out infinite; background: linear-gradient(135deg, #3fb950, #58a6ff); }
+        @keyframes jarvis-pulse { 0%,100% { box-shadow: 0 4px 20px rgba(88,166,255,0.4); } 50% { box-shadow: 0 4px 40px rgba(63,185,80,0.7); } }
+
+        /* Panel */
+        #jarvis-panel {
+            position: fixed; bottom: 90px; right: 24px; z-index: 1998;
+            width: 380px; max-height: 560px; background: rgba(22,27,34,0.95);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px; display: none; flex-direction: column;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+            overflow: hidden; animation: jarvis-slide 0.25s ease;
+        }
+        #jarvis-panel.open { display: flex; }
+        @keyframes jarvis-slide { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+        /* Header */
+        .jarvis-hdr {
+            padding: 14px 16px; display: flex; align-items: center; gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.02);
+        }
+        .jarvis-hdr .j-logo { font-size: 1.1rem; font-weight: 700; background: linear-gradient(135deg, #58a6ff, #3fb950); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px; }
+        .jarvis-hdr .j-status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-dim); }
+        .jarvis-hdr .j-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+        .jarvis-hdr .j-dot.idle { background: #8b949e; }
+        .jarvis-hdr .j-dot.listen { background: #3fb950; box-shadow: 0 0 8px #3fb950; animation: jarvis-dot-pulse 1s infinite; }
+        .jarvis-hdr .j-dot.think { background: #ffd33d; box-shadow: 0 0 8px #ffd33d; }
+        .jarvis-hdr .j-dot.speak { background: #58a6ff; box-shadow: 0 0 8px #58a6ff; }
+        @keyframes jarvis-dot-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .jarvis-hdr .j-close { cursor: pointer; font-size: 0.85rem; padding: 4px 8px; border: none; background: transparent; color: var(--text-dim); border-radius: 4px; }
+        .jarvis-hdr .j-close:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+
+        /* Waveform visualization */
+        .jarvis-viz { height: 60px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .jarvis-viz .wave { display: flex; gap: 3px; align-items: center; height: 100%; }
+        .jarvis-viz .wave span { width: 3px; background: linear-gradient(to top, #58a6ff, #3fb950); border-radius: 2px; transition: height 0.1s ease; }
+        .jarvis-viz .wave span:nth-child(1) { height: 12px; }
+        .jarvis-viz .wave span:nth-child(2) { height: 20px; }
+        .jarvis-viz .wave span:nth-child(3) { height: 8px; }
+        .jarvis-viz .wave span:nth-child(4) { height: 28px; }
+        .jarvis-viz .wave span:nth-child(5) { height: 16px; }
+        .jarvis-viz .wave span:nth-child(6) { height: 8px; }
+        .jarvis-viz .wave span:nth-child(7) { height: 24px; }
+        .jarvis-viz .wave span:nth-child(8) { height: 14px; }
+        .jarvis-viz .wave span:nth-child(9) { height: 20px; }
+        .jarvis-viz .wave span:nth-child(10) { height: 10px; }
+        .jarvis-viz .wave.active span { animation: jarvis-wave 0.5s ease-in-out infinite alternate; }
+        @keyframes jarvis-wave {
+            0% { transform: scaleY(0.4); }
+            100% { transform: scaleY(1.2); }
+        }
+        .jarvis-viz .wave.active span:nth-child(1) { animation-delay: 0s; }
+        .jarvis-viz .wave.active span:nth-child(2) { animation-delay: 0.05s; }
+        .jarvis-viz .wave.active span:nth-child(3) { animation-delay: 0.1s; }
+        .jarvis-viz .wave.active span:nth-child(4) { animation-delay: 0.15s; }
+        .jarvis-viz .wave.active span:nth-child(5) { animation-delay: 0.2s; }
+        .jarvis-viz .wave.active span:nth-child(6) { animation-delay: 0.25s; }
+        .jarvis-viz .wave.active span:nth-child(7) { animation-delay: 0.3s; }
+        .jarvis-viz .wave.active span:nth-child(8) { animation-delay: 0.35s; }
+        .jarvis-viz .wave.active span:nth-child(9) { animation-delay: 0.4s; }
+        .jarvis-viz .wave.active span:nth-child(10) { animation-delay: 0.45s; }
+
+        /* Messages */
+        .jarvis-msgs { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+        .jarvis-msgs:empty + .jarvis-empty { display: block; }
+        .jarvis-empty { text-align: center; color: var(--text-dim); padding: 30px; display: none; font-size: 0.8rem; }
+        .jmsg { padding: 10px 12px; border-radius: 10px; font-size: 0.8rem; line-height: 1.45; max-width: 90%; animation: fadeIn 0.2s ease; }
+        .jmsg.user { background: rgba(31,111,235,0.3); border: 1px solid rgba(31,111,235,0.2); align-self: flex-end; }
+        .jmsg.assistant { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); align-self: flex-start; }
+        .jmsg .jmsg-text { white-space: pre-wrap; word-break: break-word; }
+        .jmsg .jmsg-meta { font-size: 0.65rem; color: var(--text-dim); margin-top: 4px; }
+
+        /* Controls */
+        .jarvis-ctrl {
+            padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .jarvis-ctrl #jarvis-mic-btn {
+            width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.04); cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; transition: all 0.2s;
+        }
+        .jarvis-ctrl #jarvis-mic-btn:hover { border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); }
+        .jarvis-ctrl #jarvis-mic-btn.active { border-color: #3fb950; background: rgba(63,185,80,0.15); animation: jarvis-mic-pulse 1.5s infinite; }
+        .jarvis-ctrl #jarvis-mic-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        @keyframes jarvis-mic-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(63,185,80,0.3); } 50% { box-shadow: 0 0 0 12px rgba(63,185,80,0); } }
+        .jarvis-ctrl .j-interim { flex: 1; font-size: 0.8rem; color: var(--text-dim); font-style: italic; min-height: 20px; }
+        .jarvis-ctrl .j-tts-toggle { font-size: 0.75rem; padding: 4px 10px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 6px; }
+        .jarvis-ctrl .j-tts-toggle:hover { border-color: rgba(255,255,255,0.15); color: var(--text); }
+        .jarvis-ctrl .j-tts-toggle.on { border-color: #58a6ff; color: #58a6ff; }
+
+        /* Error state */
+        .jarvis-err { padding: 20px; text-align: center; color: var(--red); font-size: 0.85rem; }
+    </style>
+
+    <!-- Jarvis HTML -->
+    <button id="jarvis-fab" onclick="jarvisToggle()" title="J.A.R.V.I.S. — Assistente vocale">🎙</button>
+
+    <div id="jarvis-panel">
+        <div class="jarvis-hdr">
+            <span class="j-logo">J.A.R.V.I.S.</span>
+            <span class="j-status">
+                <span class="j-dot idle" id="jarvisDot"></span>
+                <span id="jarvisStatusLabel">inattivo</span>
+            </span>
+            <button class="j-close" onclick="jarvisToggle()">✕</button>
+        </div>
+        <div class="jarvis-viz">
+            <div class="wave" id="jarvisWave">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="jarvis-msgs" id="jarvisMsgs"></div>
+        <div class="jarvis-empty" id="jarvisEmpty">Premi il microfono e parla con J.A.R.V.I.S.</div>
+        <div class="jarvis-ctrl">
+            <button id="jarvis-mic-btn" onclick="jarvisMicToggle()" title="Attiva/disattiva microfono">🎤</button>
+            <span class="j-interim" id="jarvisInterim"></span>
+            <button class="j-tts-toggle on" id="jarvisTtsBtn" onclick="jarvisTtsToggle()" title="Attiva/disattiva voce">🔊</button>
+        </div>
+    </div>
+
+    <script>
+    // ── J.A.R.V.I.S. Voice Assistant ────────────────────────────
+    (function() {
+        const J = {
+            enabled: false,
+            listening: false,
+            speaking: false,
+            processing: false,
+            ttsEnabled: true,
+            recognition: null,
+            synthesis: window.speechSynthesis,
+            messages: [],
+            voice: null,
+            wakeWord: 'jarvis',
+            wakeDetected: false,
+        };
+
+        // ── Init ─────────────────────────────────────────────────
+        function init() {
+            // Check browser support
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition || !J.synthesis) {
+                document.getElementById('jarvis-panel').innerHTML = '<div class="jarvis-err">⚠ Assistente vocale non supportato da questo browser. Usa Chrome o Edge.</div>';
+                return;
+            }
+
+            // Init recognition
+            J.recognition = new SpeechRecognition();
+            J.recognition.continuous = true;
+            J.recognition.interimResults = true;
+            J.recognition.lang = 'it-IT';
+
+            J.recognition.onresult = function(e) {
+                let interim = '';
+                let final = '';
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    const r = e.results[i];
+                    if (r.isFinal) final += r[0].transcript;
+                    else interim += r[0].transcript;
+                }
+                document.getElementById('jarvisInterim').textContent = interim || (final ? '' : '');
+
+                if (final) {
+                    const trimmed = final.trim().toLowerCase();
+                    // Check wake word
+                    if (!J.wakeDetected) {
+                        if (trimmed.includes(J.wakeWord)) {
+                            J.wakeDetected = true;
+                            jarvisAddMsg('assistant', 'Ai tuoi ordini. Come posso aiutarti?');
+                            jStatus('listen', 'in ascolto');
+                            return;
+                        }
+                        return;
+                    }
+                    // Process command
+                    const cmd = trimmed.replace(J.wakeWord, '').trim();
+                    if (cmd) {
+                        jarvisProcess(cmd);
+                    }
+                }
+            };
+
+            J.recognition.onerror = function(e) {
+                if (e.error === 'no-speech' || e.error === 'aborted') return;
+                toast('J.A.R.V.I.S.: ' + e.error, 'error');
+                jStatus('idle', 'errore: ' + e.error);
+                J.listening = false;
+                document.getElementById('jarvis-mic-btn').classList.remove('active');
+                document.getElementById('jarvisFab').classList.remove('listening');
+            };
+
+            J.recognition.onend = function() {
+                if (J.listening) {
+                    try { J.recognition.start(); } catch(e) {}
+                }
+            };
+
+            // Find a good voice
+            function findVoice() {
+                const voices = J.synthesis.getVoices();
+                // Prefer a British English male voice for Jarvis feel
+                J.voice = voices.find(v => v.lang.startsWith('en-GB') && v.name.toLowerCase().includes('male'))
+                    || voices.find(v => v.lang.startsWith('en-GB'))
+                    || voices.find(v => v.lang.startsWith('en'))
+                    || voices.find(v => v.lang.startsWith('it'))
+                    || voices[0];
+            }
+            findVoice();
+            if (J.synthesis.onvoiceschanged !== undefined) {
+                J.synthesis.onvoiceschanged = findVoice;
+            }
+
+            J.enabled = true;
+        }
+
+        // ── Status ───────────────────────────────────────────────
+        function jStatus(state, label) {
+            const dot = document.getElementById('jarvisDot');
+            const lbl = document.getElementById('jarvisStatusLabel');
+            dot.className = 'j-dot ' + state;
+            lbl.textContent = label || state;
+            const wave = document.getElementById('jarvisWave');
+            wave.classList.toggle('active', state === 'listen' || state === 'speak');
+        }
+
+        // ── Toggle panel ─────────────────────────────────────────
+        window.jarvisToggle = function() {
+            const panel = document.getElementById('jarvis-panel');
+            const fab = document.getElementById('jarvis-fab');
+            const isOpen = panel.classList.toggle('open');
+            fab.style.display = isOpen ? 'none' : 'flex';
+            if (isOpen && !J.enabled) init();
+        };
+
+        // ── Mic toggle ───────────────────────────────────────────
+        window.jarvisMicToggle = function() {
+            if (!J.enabled) { toast('Assistente vocale non disponibile', 'error'); return; }
+            if (J.listening) {
+                jarvisStop();
+            } else {
+                jarvisStart();
+            }
+        };
+
+        function jarvisStart() {
+            if (!J.recognition) return;
+            try {
+                J.recognition.start();
+                J.listening = true;
+                J.wakeDetected = false;
+                // Check if wake word is needed (if no messages yet, require wake word)
+                if (J.messages.length === 0) {
+                    jarvisAddMsg('assistant', 'Pronuncia "Jarvis" per attivarmi.');
+                }
+                document.getElementById('jarvis-mic-btn').classList.add('active');
+                document.getElementById('jarvis-fab').classList.add('listening');
+                jStatus('listen', 'in ascolto');
+                document.getElementById('jarvisInterim').textContent = '';
+            } catch(e) {
+                toast('J.A.R.V.I.S.: ' + e.message, 'error');
+            }
+        }
+
+        function jarvisStop() {
+            if (!J.recognition) return;
+            try { J.recognition.stop(); } catch(e) {}
+            J.listening = false;
+            document.getElementById('jarvis-mic-btn').classList.remove('active');
+            document.getElementById('jarvis-fab').classList.remove('listening');
+            document.getElementById('jarvisInterim').textContent = '';
+            jStatus('idle', 'inattivo');
+        }
+
+        // ── Process command ──────────────────────────────────────
+        async function jarvisProcess(text) {
+            jarvisAddMsg('user', text);
+            jStatus('think', 'elaborazione...');
+            document.getElementById('jarvisInterim').textContent = '';
+
+            // Stop listening while processing
+            const wasListening = J.listening;
+            if (wasListening) {
+                try { J.recognition.stop(); } catch(e) {}
+                J.listening = false;
+                document.getElementById('jarvis-mic-btn').classList.remove('active');
+                document.getElementById('jarvis-fab').classList.remove('listening');
+            }
+
+            J.processing = true;
+
+            try {
+                const resp = await api('/api/chat', {
+                    method: 'POST',
+                    body: JSON.stringify({ prompt: text }),
+                });
+
+                const reply = resp.response || 'Nessuna risposta.';
+                jarvisAddMsg('assistant', reply, resp.source, resp.tokens_total);
+
+                // Speak the response
+                if (J.ttsEnabled) {
+                    jarvisSpeak(reply);
+                }
+
+            } catch(e) {
+                jarvisAddMsg('assistant', 'Errore: ' + e.message);
+                toast('J.A.R.V.I.S.: ' + e.message, 'error');
+            }
+
+            J.processing = false;
+
+            // Resume listening
+            if (wasListening) {
+                setTimeout(() => {
+                    if (!J.listening) {
+                        try {
+                            J.recognition.start();
+                            J.listening = true;
+                            J.wakeDetected = true;
+                            document.getElementById('jarvis-mic-btn').classList.add('active');
+                            document.getElementById('jarvis-fab').classList.add('listening');
+                            jStatus('listen', 'in ascolto');
+                        } catch(e) {}
+                    }
+                }, 500);
+            }
+        }
+
+        // ── Add message ──────────────────────────────────────────
+        function jarvisAddMsg(role, text, source, tokens) {
+            const container = document.getElementById('jarvisMsgs');
+            const empty = document.getElementById('jarvisEmpty');
+            empty.style.display = 'none';
+
+            const div = document.createElement('div');
+            div.className = 'jmsg ' + role;
+            const meta = role === 'assistant' && source
+                ? '<div class="jmsg-meta">' + source.toUpperCase() + (tokens ? ' · ' + tokens + ' token' : '') + '</div>'
+                : '';
+            div.innerHTML = '<div class="jmsg-text">' + escHtml(text) + '</div>' + meta;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+
+            J.messages.push({ role, text, source, tokens });
+            if (J.messages.length > 20) J.messages.shift();
+        }
+
+        // ── Speak ────────────────────────────────────────────────
+        function jarvisSpeak(text) {
+            if (!J.synthesis || J.speaking) return;
+            // Trim to first ~500 chars for speech
+            const speechText = text.replace(/[*#\[\]()`_]/g, '').replace(/\n+/g, ' ').trim().slice(0, 600);
+            if (!speechText) return;
+
+            const utter = new SpeechSynthesisUtterance(speechText);
+            if (J.voice) utter.voice = J.voice;
+            utter.rate = 0.85;
+            utter.pitch = 0.7;  // Lower pitch for Jarvis feel
+            utter.volume = 1;
+
+            J.speaking = true;
+            jStatus('speak', 'parla');
+            document.getElementById('jarvisWave').classList.add('active');
+
+            utter.onend = function() {
+                J.speaking = false;
+                if (J.listening) {
+                    jStatus('listen', 'in ascolto');
+                } else {
+                    jStatus('idle', 'inattivo');
+                    document.getElementById('jarvisWave').classList.remove('active');
+                }
+            };
+            utter.onerror = function() {
+                J.speaking = false;
+                jStatus('idle', 'inattivo');
+            };
+
+            J.synthesis.speak(utter);
+        }
+
+        // ── TTS toggle ───────────────────────────────────────────
+        window.jarvisTtsToggle = function() {
+            J.ttsEnabled = !J.ttsEnabled;
+            const btn = document.getElementById('jarvisTtsBtn');
+            btn.classList.toggle('on', J.ttsEnabled);
+            btn.textContent = J.ttsEnabled ? '🔊' : '🔇';
+            if (!J.ttsEnabled && J.speaking) {
+                J.synthesis.cancel();
+                J.speaking = false;
+                jStatus('idle', 'inattivo');
+            }
+        };
+
+        // ── Expose for inline handlers ───────────────────────────
+        window.jarvisProcess = jarvisProcess;
+        window.jarvisAddMsg = jarvisAddMsg;
+        window.jarvisStop = jarvisStop;
+        window.jStatus = jStatus;
+
+        // Init on load
+        if (document.readyState === 'complete') init();
+        else window.addEventListener('load', init);
+    })();
+    </script>
+
+    <script>
+        // ── Theme toggle ─────────────────────────────────────────────
+        function toggleTheme() {
+            const root = document.documentElement;
+            const isLight = root.classList.toggle('light');
+            const btn = document.getElementById('themeToggle');
+            btn.textContent = isLight ? '☀️' : '🌙';
+            try { localStorage.setItem('ai_plus_theme', isLight ? 'light' : 'dark'); } catch(e) {}
+        }
+        function applySavedTheme() {
+            const saved = (() => { try { return localStorage.getItem('ai_plus_theme'); } catch(e) { return null; } })();
+            if (saved === 'light') {
+                document.documentElement.classList.add('light');
+                const btn = document.getElementById('themeToggle');
+                if (btn) btn.textContent = '☀️';
+            }
+        }
+        applySavedTheme();
+
+        function updateClock() {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+            const timeStr = now.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+            const dEl = document.getElementById('sidebarDate');
+            const tEl = document.getElementById('sidebarTime');
+            if (dEl) dEl.textContent = dateStr;
+            if (tEl) tEl.textContent = timeStr;
+        }
+        async function updateStatus() {
+            try {
+                const [i, p] = await Promise.all([
+                    api('/api/system/info'),
+                    api('/api/profiles').catch(() => null),
+                ]);
+                document.getElementById('localeDot').className = 'dot ' + (i.ollama_running ? 'green' : 'red');
+                document.getElementById('localeLabel').textContent = i.ollama_running ? '🖥 locale' : '🖥 ' + __('sidebar.offline');
+                document.getElementById('localeModel').textContent = i.ollama_running ? i.local_model : '—';
+                document.getElementById('onlineDot').className = 'dot ' + (i.online_configured ? 'green' : 'red');
+                document.getElementById('onlineLabel').textContent = i.online_configured ? '🌐 online' : '🌐 ' + __('sidebar.not_configured');
+                document.getElementById('onlineModel').textContent = i.online_configured ? (i.online_model || i.online_provider || '-') : '—';
+                const userLine = document.getElementById('sidebarUserLine');
+                const userName = document.getElementById('sidebarUserName');
+                if (p && p.current) {
+                    userLine.style.display = '';
+                    userName.textContent = p.current;
+                } else {
+                    userLine.style.display = 'none';
+                }
+            } catch(e) {}
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+        async function updateHeaderStats() {
+            try {
+                const s = await api('/api/stats');
+                document.getElementById('headerStats').textContent = (s.total.tokens_total || 0).toLocaleString() + ' ' + __('sidebar.token') + ' · ' + (s.total.time_s || 0).toFixed(1) + 's';
+            } catch(e) {}
+        }
+        updateStatus(); updateHeaderStats();
+        setInterval(updateStatus, 15000);
+        setInterval(updateHeaderStats, 5000);
+    </script>
+
+    <!-- ── SPA: navigazione senza ricarica ─────────────────────────── -->
+    <script>
+    (function() {
+        const $ = id => document.getElementById(id);
+
+        // Save any pending chat state before SPA navigation
+        function savePendingState() {
+            const cs = window.__chatState || {};
+            if (cs.loading && cs.prompt) {
+                // Stream was in progress — save partial response
+                cs.abandoned = true;
+                // Abort the fetch if possible
+                if (window.__chatAbort) {
+                    try { window.__chatAbort.abort(); } catch(e) {}
+                }
+            }
+        }
+
+        async function spaNavigate(url) {
+            if (!url || url === location.pathname) return;
+            const body = document.querySelector('.main-body');
+            const header = document.querySelector('header h2');
+            if (!body) return;
+
+            // Save chat state before swapping content
+            savePendingState();
+
+            try {
+                const resp = await fetch(url, { headers: { 'X-SPA': '1' } });
+                if (!resp.ok) { window.location.href = url; return; }
+                const html = await resp.text();
+
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html;
+
+                const newBody = tmp.querySelector('.main-body');
+                const newHeader = tmp.querySelector('header h2');
+                const newTitle = tmp.querySelector('title');
+
+                if (!newBody) { window.location.href = url; return; }
+
+                body.innerHTML = newBody.innerHTML;
+                if (newHeader) header.textContent = newHeader.textContent;
+                if (newTitle) document.title = newTitle.textContent;
+
+                // Re-execute scripts in the new content
+                body.querySelectorAll('script').forEach(old => {
+                    const s = document.createElement('script');
+                    for (const attr of old.attributes) s.setAttribute(attr.name, attr.value);
+                    s.textContent = old.textContent;
+                    old.replaceWith(s);
+                });
+
+                // Update nav active state
+                document.querySelectorAll('.nav a').forEach(a => {
+                    const ahref = a.getAttribute('href') || '';
+                    a.classList.toggle('active', ahref === url || ahref === url.split('?')[0]);
+                });
+
+                window.history.pushState({ url }, '', url);
+            } catch (e) {
+                window.location.href = url;
+            }
+        }
+
+        // Intercept nav clicks
+        document.querySelector('.nav')?.addEventListener('click', function(e) {
+            const a = e.target.closest('a');
+            if (!a) return;
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('http') || href.startsWith('#')) return;
+            e.preventDefault();
+            spaNavigate(href);
+        });
+
+        // Handle back/forward
+        window.addEventListener('popstate', function(e) {
+            const url = e.state?.url;
+            if (url && url !== location.pathname) {
+                // Full reload for back navigation to ensure JS state resets properly
+                location.href = url;
+            }
+        });
+    })();
+    </script>
+
+    <!-- ── i18n: apply translations on SPA load ──────────────────────── -->
+    <script>
+    (function() {
+        if (window.i18n) {
+            document.addEventListener('DOMContentLoaded', () => window.i18n.applyTranslations());
+            // Re-apply after SPA navigation
+            const origPushState = window.history.pushState;
+            window.history.pushState = function() {
+                origPushState.apply(this, arguments);
+                setTimeout(() => window.i18n.applyTranslations(), 50);
+            };
+        }
+    })();
+    </script>
+</body>
+</html>

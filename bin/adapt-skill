@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""
+adapt-skill — Adatta skill da opencode, ChatGPT, Claude o file custom
+al formato skill AI++.
+
+Utilizzo:
+  adapt-skill <file> [--platform opencode|chatgpt|claude|custom] [--name "Nome"]
+  adapt-skill --save <file>   # adatta e salva nella libreria skill AI++
+  adapt-skill --list          # elenca le skill già importate
+  adapt-skill --export <id>   # esporta una skill come JSON
+"""
+
+import sys, os, json
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from hycoder.skill_manager import (
+    adapt_skill, detect_platform, create_skill, list_skills,
+    get_skill, delete_skill, SKILLS_DIR,
+)
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        print(__doc__)
+        return
+
+    if args[0] == "--list":
+        skills = list_skills()
+        if not skills:
+            print("📭 Nessuna skill importata.")
+            return
+        print(f"📦 Skill in {SKILLS_DIR}:\n")
+        for s in skills:
+            plat = s["source_platform"]
+            tags = ", ".join(s["tags"]) if s["tags"] else "-"
+            print(f"  [{s['id']}] {s['name']} ({plat})")
+            print(f"         {s['description'][:80] or '-'}")
+            print(f"         tags: {tags}  v{s['version']}")
+            print()
+        return
+
+    if args[0] == "--export":
+        if len(args) < 2:
+            print("Specifica l'ID della skill da esportare.")
+            return
+        skill = get_skill(args[1])
+        if not skill:
+            print(f"Skill '{args[1]}' non trovata.")
+            return
+        print(json.dumps(skill, indent=2, ensure_ascii=False))
+        return
+
+    if args[0] == "--delete":
+        if len(args) < 2:
+            print("Specifica l'ID della skill da eliminare.")
+            return
+        if delete_skill(args[1]):
+            print(f"🗑 Skill '{args[1]}' eliminata.")
+        else:
+            print(f"Skill '{args[1]}' non trovata.")
+        return
+
+    # Adatta un file
+    filepath = args[0]
+    if not os.path.exists(filepath):
+        print(f"File non trovato: {filepath}")
+        sys.exit(1)
+
+    name = None
+    platform = None
+    save = False
+    for i, a in enumerate(args[1:], 1):
+        if a == "--name" and i + 1 < len(args[1:]):
+            name = args[i + 1]
+        elif a == "--platform" and i + 1 < len(args[1:]):
+            platform = args[i + 1]
+        elif a == "--save":
+            save = True
+
+    content = Path(filepath).read_text()
+
+    if not platform:
+        platform = detect_platform(filepath, content)
+
+    result = adapt_skill(content, platform)
+    if "error" in result:
+        print(f"❌ Errore: {result['error']}")
+        sys.exit(1)
+
+    if not name:
+        name = result.get("name") or Path(filepath).stem
+
+    print(f"✅ Skill adattata da '{platform}'")
+    print(f"   Nome:      {name}")
+    print(f"   Descrizione: {result.get('description', '-')[:100]}")
+    print(f"   Tools:     {len(result.get('tools', []))}")
+    print(f"   Prompt:    {len(result.get('system_prompt', ''))} chars")
+
+    if save:
+        skill_data = {
+            "name": name,
+            "description": result.get("description", ""),
+            "source_platform": platform,
+            "instructions": result.get("instructions", ""),
+            "adapted_instructions": result.get("adapted_instructions", ""),
+            "system_prompt": result.get("system_prompt", ""),
+            "tools": result.get("tools", []),
+            "tags": result.get("tags", []),
+        }
+        summary = create_skill(skill_data)
+        print(f"\n💾 Salvata in skill library: [{summary['id']}] {summary['name']}")
+    else:
+        print()
+        print("--- Anteprima system_prompt ---")
+        print((result.get("system_prompt") or result.get("instructions", ""))[:500])
+        print("---")
+        print("\n💡 Usa --save per importarla nella libreria skill AI++")
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+    main()

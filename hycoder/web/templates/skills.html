@@ -1,0 +1,317 @@
+{% extends "layout.html" %}
+{% block title %}Skills{% endblock %}
+{% block heading %}⚡ Skills{% endblock %}
+{% block content %}
+<style>
+    .sk-grid { display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:960px;margin:0 auto; }
+    .sk-card { background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;transition:box-shadow 0.2s,border-color 0.2s; }
+    .sk-card:hover { border-color:rgba(210,168,255,0.2);box-shadow:0 4px 20px rgba(0,0,0,0.15); }
+    .sk-card h3 { margin:0 0 14px;font-size:0.95rem;display:flex;align-items:center;gap:8px; }
+    .sk-card input,.sk-card select { width:100%;margin-bottom:8px; }
+    .sk-card .btn { margin-top:4px; }
+    .sk-drop-zone { border:2px dashed var(--border);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all 0.25s;background:var(--surface); }
+    .sk-drop-zone:hover,.sk-drop-zone.drag-over { border-color:#d2a8ff;background:rgba(210,168,255,0.04); }
+    .sk-drop-zone.drag-over { border-style:solid; }
+    .sk-drop-zone .dz-icon { font-size:2rem;margin-bottom:8px;display:inline-block;animation:skFloat 2.5s ease-in-out infinite; }
+    @keyframes skFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+    @keyframes skFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes skPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .sk-list { max-width:960px;margin:16px auto; }
+    .sk-item { background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;transition:border-color 0.2s,box-shadow 0.2s;animation:skFadeIn 0.25s ease;cursor:default; }
+    .sk-item:hover { border-color:rgba(210,168,255,0.2);box-shadow:0 2px 12px rgba(0,0,0,0.1); }
+    .sk-item .sk-icon { font-size:1.5rem;flex-shrink:0;width:36px;text-align:center; }
+    .sk-item .sk-body { flex:1;min-width:0; }
+    .sk-item .sk-body .sk-name { font-weight:600;font-size:0.9rem;margin-bottom:2px; }
+    .sk-item .sk-body .sk-desc { font-size:0.8rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .sk-item .sk-body .sk-meta { display:flex;gap:8px;margin-top:4px;flex-wrap:wrap; }
+    .sk-item .sk-actions { display:flex;gap:4px;flex-shrink:0; }
+    .sk-tag { display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:0.65rem;background:rgba(210,168,255,0.08);color:#d2a8ff;border:1px solid rgba(210,168,255,0.15); }
+    .sk-platform-badge { display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:4px;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.3px; }
+    .sk-platform-badge.opencode { background:rgba(88,166,255,0.1);color:#58a6ff; }
+    .sk-platform-badge.chatgpt { background:rgba(61,185,80,0.1);color:#3fb950; }
+    .sk-platform-badge.claude { background:rgba(240,136,62,0.1);color:#f0883e; }
+    .sk-platform-badge.custom { background:rgba(139,148,158,0.1);color:var(--text-dim); }
+    .sk-empty { text-align:center;padding:60px 20px;color:var(--text-dim); }
+    .sk-empty .empty-icon { font-size:3rem;margin-bottom:12px;opacity:0.4; }
+    .sk-empty .empty-title { font-size:1.1rem;font-weight:600;margin-bottom:6px; }
+    .sk-empty .empty-desc { font-size:0.85rem;opacity:0.7;max-width:400px;margin:0 auto; }
+    .sk-modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;animation:skFadeIn 0.2s ease; }
+    .sk-modal { background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:680px;width:90%;max-height:80vh;overflow-y:auto; }
+    .sk-modal h3 { margin:0 0 16px; }
+    .sk-modal pre { background:var(--bg-dim);padding:12px;border-radius:6px;font-size:0.8rem;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;border:1px solid var(--border); }
+    .sk-modal .close-btn { float:right;background:none;border:none;color:var(--text-dim);font-size:1.2rem;cursor:pointer; }
+    .sk-modal .close-btn:hover { color:var(--text); }
+    .sk-modal .field { margin-bottom:10px; }
+    .sk-modal .field label { display:block;font-size:0.75rem;color:var(--text-dim);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.3px; }
+    .sk-progress { height:4px;border-radius:2px;background:var(--border);overflow:hidden;margin-top:8px;display:none; }
+    .sk-progress-bar { height:100%;border-radius:2px;background:linear-gradient(90deg,#d2a8ff,#58a6ff);transition:width 0.4s ease; }
+</style>
+
+<div class="sk-grid">
+    <div class="sk-card">
+        <h3>📤 Carica skill</h3>
+        <div class="sk-drop-zone" id="skDropZone"
+             ontouchend="document.getElementById('skFileInput').click()"
+             onclick="document.getElementById('skFileInput').click()"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="event.preventDefault();this.classList.remove('drag-over')"
+             ondrop="event.preventDefault();this.classList.remove('drag-over');skHandleDrop(event)">
+            <div class="dz-icon">⚡</div>
+            <div class="dz-text" data-i18n="skills.upload_hint">Trascina un file skill o clicca per caricare</div>
+            <div style="color:var(--text-dim);font-size:0.7rem;margin-top:4px;opacity:0.6" data-i18n="skills.upload_formats">Supporta: .md (opencode), .json (ChatGPT GPT, Claude)</div>
+            <input type="file" id="skFileInput" accept=".md,.json,.yaml,.yml,.txt" style="display:none" onchange="skHandleSelect(this)">
+        </div>
+        <div style="margin-top:8px">
+            <input type="text" id="skNameInput" placeholder="Nome skill (opzionale)" data-i18n="skills.name_placeholder" style="margin-bottom:4px">
+            <select id="skPlatformSelect" style="margin-bottom:4px">
+                <option value="auto" data-i18n="skills.platform_auto">🔍 Rileva automaticamente</option>
+                <option value="opencode">📖 opencode .md</option>
+                <option value="chatgpt">🤖 ChatGPT GPT</option>
+                <option value="claude">🎨 Claude Project</option>
+                <option value="custom">📦 Custom</option>
+            </select>
+            <button class="btn btn-primary" onclick="skUpload()" id="skUploadBtn" data-i18n="skills.upload_btn">⚡ Carica e adatta</button>
+            <div class="sk-progress" id="skProgress"><div class="sk-progress-bar" id="skProgressBar" style="width:0%"></div></div>
+            <div id="skResult" class="text-dim" style="margin-top:6px;font-size:0.8rem"></div>
+        </div>
+    </div>
+    <div class="sk-card">
+        <h3>📝 Crea manualmente</h3>
+        <input type="text" id="skManualName" placeholder="Nome skill" data-i18n="skills.manual_name">
+        <input type="text" id="skManualDesc" placeholder="Descrizione" data-i18n="skills.manual_desc">
+        <textarea id="skManualPrompt" rows="4" placeholder="System prompt / istruzioni..." style="width:100%;margin-bottom:8px;font-size:0.8rem;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);resize:vertical" data-i18n="skills.manual_prompt"></textarea>
+        <input type="text" id="skManualTags" placeholder="Tag (separati da virgola)" data-i18n="skills.manual_tags">
+        <button class="btn btn-primary" onclick="skCreateManual()" data-i18n="skills.manual_create">➕ Crea skill</button>
+    </div>
+</div>
+
+<div class="sk-list" id="skList"></div>
+
+<div id="skDetailModal" class="sk-modal-overlay" style="display:none" onclick="if(event.target===this)skCloseDetail()">
+    <div class="sk-modal">
+        <button class="close-btn" onclick="skCloseDetail()">&times;</button>
+        <h3 id="skDetailName">⚡ Skill</h3>
+        <div id="skDetailBody"></div>
+    </div>
+</div>
+
+<script>
+    let _skFile = null;
+    let _skSkills = [];
+
+    function skHandleDrop(e) {
+        const file = e.dataTransfer.files[0];
+        if (file) { _skFile = file; skShowFile(file); }
+    }
+
+    function skHandleSelect(input) {
+        const file = input.files[0];
+        if (file) { _skFile = file; skShowFile(file); }
+        input.value = '';
+    }
+
+    function skShowFile(file) {
+        const el = document.getElementById('skResult');
+        el.innerHTML = `<span style="color:var(--text-dim)">📄 ${escHtml(file.name)} (${(file.size / 1024).toFixed(1)} KB)</span>`;
+        // Try auto-detecting platform
+        const sel = document.getElementById('skPlatformSelect');
+        if (file.name.endsWith('.md')) sel.value = 'opencode';
+        else if (file.name.endsWith('.json')) sel.value = 'auto';
+    }
+
+    async function skUpload() {
+        const file = _skFile;
+        if (!file) { toast('Seleziona un file first', 'error'); return; }
+
+        const btn = document.getElementById('skUploadBtn');
+        btn.disabled = true;
+        const prog = document.getElementById('skProgress');
+        const bar = document.getElementById('skProgressBar');
+        prog.style.display = 'block';
+        bar.style.width = '20%';
+
+        const formData = new FormData();
+        formData.append('file', file);
+        const platform = document.getElementById('skPlatformSelect').value;
+        if (platform !== 'auto') formData.append('platform', platform);
+        const name = document.getElementById('skNameInput').value.trim();
+        if (name) formData.append('name', name);
+
+        try {
+            bar.style.width = '60%';
+            const r = await fetch('/api/skills/upload', { method: 'POST', body: formData });
+            const data = await r.json();
+            bar.style.width = '100%';
+
+            if (data.error) {
+                document.getElementById('skResult').innerHTML = '<span class="error">❌ ' + escHtml(data.error) + '</span>';
+            } else {
+                document.getElementById('skResult').innerHTML = `<span style="color:var(--green);font-weight:600">✅ ${escHtml(data.name)}</span><span style="color:var(--text-dim);font-size:0.75rem;margin-left:4px"> — ${data.source_platform}</span>`;
+                _skFile = null;
+                document.getElementById('skNameInput').value = '';
+                skLoadList();
+            }
+        } catch(e) {
+            document.getElementById('skResult').innerHTML = '<span class="error">❌ ' + escHtml(e.message) + '</span>';
+        }
+
+        setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0%'; }, 1500);
+        btn.disabled = false;
+    }
+
+    async function skLoadList() {
+        try {
+            const r = await api('/api/skills');
+            _skSkills = r.skills || [];
+            renderSkList();
+        } catch(e) {
+            document.getElementById('skList').innerHTML = '<span class="error">' + __('common.error') + ': ' + e.message + '</span>';
+        }
+    }
+
+    function renderSkList() {
+        const el = document.getElementById('skList');
+        if (_skSkills.length === 0) {
+            el.innerHTML = `<div class="sk-empty">
+                <div class="empty-icon">⚡</div>
+                <div class="empty-title" data-i18n="skills.empty_title">Nessuna skill ancora</div>
+                <div class="empty-desc" data-i18n="skills.empty_desc">Carica una skill da opencode, ChatGPT o Claude, oppure creala manualmente</div>
+            </div>`;
+            return;
+        }
+        let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;color:var(--text-dim);font-size:0.8rem">
+            <span style="font-weight:600;font-size:0.9rem;color:var(--text)">📦 ${_skSkills.length} skill</span>
+        </div>`;
+        for (const s of _skSkills) {
+            const plat = s.source_platform || 'custom';
+            const tagHtml = (s.tags || []).slice(0, 3).map(t => `<span class="sk-tag">${escHtml(t)}</span>`).join('');
+            const toolCount = (s.tools || []).length;
+            const desc = s.description || '';
+            const dateStr = s.created_at ? new Date(s.created_at * 1000).toLocaleDateString() : '';
+            html += `<div class="sk-item">
+                <div class="sk-icon">⚡</div>
+                <div class="sk-body" onclick="skShowDetail('${s.id}')" style="cursor:pointer">
+                    <div class="sk-name">${escHtml(s.name)}</div>
+                    ${desc ? `<div class="sk-desc">${escHtml(desc)}</div>` : ''}
+                    <div class="sk-meta">
+                        <span class="sk-platform-badge ${plat}">${plat}</span>
+                        ${toolCount > 0 ? `<span class="sk-tag">🔧 ${toolCount} tools</span>` : ''}
+                        <span class="sk-tag">v${s.version || 1}</span>
+                        ${tagHtml}
+                        ${dateStr ? `<span class="sk-tag" style="color:var(--text-dim);border-color:transparent">${dateStr}</span>` : ''}
+                    </div>
+                </div>
+                <div class="sk-actions">
+                    <button class="btn btn-sm" onclick="skShowDetail('${s.id}')" title="Dettagli">👁️</button>
+                    <button class="btn btn-sm btn-danger" onclick="skDelete('${s.id}','${escHtml(s.name)}')" title="Elimina">🗑</button>
+                </div>
+            </div>`;
+        }
+        el.innerHTML = html;
+    }
+
+    async function skShowDetail(id) {
+        try {
+            const s = await api('/api/skills/' + id);
+            const modal = document.getElementById('skDetailModal');
+            document.getElementById('skDetailName').textContent = '⚡ ' + (s.name || 'Skill');
+            const body = document.getElementById('skDetailBody');
+
+            const systemPrompt = s.system_prompt || s.adapted_instructions || s.instructions || '';
+            const tools = s.tools || [];
+            const tags = s.tags || [];
+            const plat = s.source_platform || 'custom';
+            const dateStr = s.created_at ? new Date(s.created_at * 1000).toLocaleString() : '-';
+
+            body.innerHTML = `
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+                    <span class="sk-platform-badge ${plat}">${plat}</span>
+                    <span class="sk-tag">v${s.version || 1}</span>
+                    ${tags.map(t => `<span class="sk-tag">${escHtml(t)}</span>`).join('')}
+                    <span class="sk-tag" style="color:var(--text-dim);border-color:transparent">📅 ${dateStr}</span>
+                </div>
+                ${s.description ? `<div class="field"><label>Descrizione</label><p style="margin:0;font-size:0.85rem">${escHtml(s.description)}</p></div>` : ''}
+                <div class="field"><label>System Prompt / Istruzioni</label>
+                    <pre>${escHtml(systemPrompt || '(vuoto)')}</pre>
+                </div>
+                ${tools.length > 0 ? `<div class="field"><label>Tools (${tools.length})</label>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">${tools.map(t => `<span class="sk-tag">🔧 ${escHtml(t)}</span>`).join('')}</div>
+                </div>` : ''}
+                <div style="display:flex;gap:6px;margin-top:16px">
+                    <button class="btn btn-sm" onclick="skExport('${id}')">📥 Esporta JSON</button>
+                    <button class="btn btn-sm" onclick="skCopyPrompt('${escHtml(systemPrompt)}')">📋 Copia prompt</button>
+                    <button class="btn btn-sm btn-danger" onclick="skDelete('${id}','${escHtml(s.name)}');skCloseDetail()">🗑 Elimina</button>
+                </div>
+            `;
+            modal.style.display = 'flex';
+        } catch(e) {
+            toast('Errore: ' + e.message, 'error');
+        }
+    }
+
+    function skCloseDetail() {
+        document.getElementById('skDetailModal').style.display = 'none';
+    }
+
+    async function skDelete(id, name) {
+        if (!confirm('Eliminare la skill "' + name + '"?')) return;
+        try {
+            await api('/api/skills/' + id, { method: 'DELETE' });
+            toast('Skill eliminata', 'success');
+            skLoadList();
+        } catch(e) {
+            toast('Errore: ' + e.message, 'error');
+        }
+    }
+
+    async function skExport(id) {
+        try {
+            const s = await api('/api/skills/' + id + '/export');
+            const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (s.name || 'skill') + '.json';
+            a.click();
+            toast('Esportato', 'success');
+        } catch(e) {
+            toast('Errore: ' + e.message, 'error');
+        }
+    }
+
+    function skCopyPrompt(text) {
+        navigator.clipboard.writeText(text).then(() => toast('Prompt copiato', 'success')).catch(() => {});
+    }
+
+    async function skCreateManual() {
+        const name = document.getElementById('skManualName').value.trim();
+        if (!name) { toast('Inserisci un nome', 'error'); return; }
+        const desc = document.getElementById('skManualDesc').value.trim();
+        const prompt = document.getElementById('skManualPrompt').value.trim();
+        const tagsStr = document.getElementById('skManualTags').value.trim();
+        const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+        try {
+            const r = await api('/api/skills', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name, description: desc,
+                    instructions: prompt,
+                    system_prompt: prompt,
+                    tags, source_platform: 'custom',
+                }),
+            });
+            toast('✅ Skill creata: ' + r.name, 'success');
+            document.getElementById('skManualName').value = '';
+            document.getElementById('skManualDesc').value = '';
+            document.getElementById('skManualPrompt').value = '';
+            document.getElementById('skManualTags').value = '';
+            skLoadList();
+        } catch(e) {
+            toast('Errore: ' + e.message, 'error');
+        }
+    }
+
+    skLoadList();
+</script>
+{% endblock %}

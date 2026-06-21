@@ -1,0 +1,941 @@
+{% extends "layout.html" %}
+{% block title %}<span data-i18n="page.title.projects">Projects</span>{% endblock %}
+{% block heading %}🏗️ <span data-i18n="page.heading.projects">Projects</span>{% endblock %}
+{% block content %}
+<style>
+    .project-list { display: grid; gap: 12px; }
+    .project-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; transition: border-color 0.15s; }
+    .project-card:hover { border-color: rgba(88,166,255,0.3); }
+    .project-card h3 { font-size: 1rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .project-card .meta { font-size: 0.78rem; color: var(--text-dim); display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+    .project-card .meta .tag { background: rgba(88,166,255,0.08); padding: 1px 6px; border-radius: 4px; color: var(--blue); font-size: 0.7rem; }
+    .project-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .section-box {
+        background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+        padding: 20px; margin-bottom: 20px;
+    }
+    .section-box .sec-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .section-box .sec-header h3 { font-size: 1rem; margin: 0; }
+    .section-box textarea {
+        width: 100%; padding: 12px; border-radius: 6px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--text); font-size: 0.9rem; resize: vertical;
+        min-height: 80px; font-family: inherit; outline: none;
+    }
+    .section-box textarea:focus { border-color: var(--blue); }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+    .row input {
+        padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--text); font-size: 0.8rem; flex: 1; min-width: 150px; outline: none;
+    }
+    .row input:focus { border-color: var(--blue); }
+    .gen-log {
+        display: none; margin-top: 12px; padding: 12px; background: #0d1117;
+        border: 1px solid var(--border); border-radius: 6px;
+        font-family: 'SF Mono', monospace; font-size: 0.78rem; max-height: 200px;
+        overflow-y: auto; white-space: pre-wrap; line-height: 1.5;
+    }
+    .gen-log.visible { display: block; }
+    .gen-log .gen-status { color: var(--blue); }
+    .gen-log .gen-done { color: var(--green); }
+    .gen-log .gen-error { color: var(--red); }
+    .gen-log .gen-stdout { color: var(--text); }
+    .gen-log .gen-stderr { color: var(--orange); }
+    .file-tree { margin: 8px 0; font-size: 0.78rem; max-height: 220px; overflow-y: auto; }
+    .file-tree .ft-item { display: flex; align-items: center; gap: 4px; padding: 2px 0; color: var(--text-dim); cursor: pointer; }
+    .file-tree .ft-item:hover { color: var(--text); }
+    .file-tree .ft-item.ft-dir { color: var(--text-dim); font-weight: 500; cursor: default; }
+    .file-tree .ft-item.ft-file { padding-left: 16px; }
+    .file-tree .ft-item.ft-file.active { color: var(--blue); }
+    .file-tree .ft-indent { padding-left: 16px; }
+    .ft-item.ft-new { color: var(--green); font-size: 0.72rem; cursor: pointer; padding-left: 16px; }
+    .ft-item.ft-new:hover { color: var(--green); text-decoration: underline; }
+    .ft-item.ft-del { color: var(--red); font-size: 0.72rem; cursor: pointer; padding-left: 6px; }
+    .ft-item.ft-del:hover { color: var(--red); text-decoration: underline; }
+    .editor-wrap { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-top: 8px; }
+    .editor-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); }
+    .editor-bar .eb-name { flex: 1; font-size: 0.78rem; color: var(--text-dim); font-family: 'SF Mono', monospace; }
+    .editor-body { position: relative; display: flex; }
+    .editor-gutter {
+        padding: 12px 8px 12px 12px; background: #0d1117; color: #484f58;
+        font-family: 'SF Mono', monospace; font-size: 0.82rem; line-height: 1.55;
+        text-align: right; user-select: none; min-width: 32px;
+        border-right: 1px solid var(--border); white-space: pre;
+    }
+    .editor-wrap textarea {
+        flex: 1; padding: 12px; border: none; resize: vertical;
+        background: #0d1117; color: #e6edf3; font-family: 'SF Mono', monospace; font-size: 0.82rem;
+        line-height: 1.55; outline: none; tab-size: 4; min-height: 200px;
+    }
+    .improve-section { display: none; margin-top: 8px; }
+    .improve-section.open { display: block; }
+    .improve-section textarea {
+        width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--text); font-size: 0.8rem; min-height: 50px;
+        font-family: inherit; outline: none; resize: vertical;
+    }
+    .improve-section textarea:focus { border-color: var(--orange); }
+    .search-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .search-bar input {
+        flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--text); font-size: 0.85rem; outline: none;
+    }
+    .search-bar input:focus { border-color: var(--blue); }
+    .import-zone {
+        border: 2px dashed var(--border); border-radius: 8px; padding: 20px;
+        text-align: center; transition: border-color 0.2s; cursor: pointer;
+    }
+    .import-zone:hover, .import-zone.dragover { border-color: var(--blue); }
+    @media (max-width: 700px) {
+        .project-actions .btn span.btn-label { display: none; }
+    }
+    .output-pane-live { margin-top: 8px; display: none; }
+    .output-pane-live.open { display: block; }
+    .output-pane-live pre {
+        padding: 10px; background: #0d1117; border: 1px solid var(--border);
+        border-radius: 6px; max-height: 250px; overflow-y: auto;
+        font-family: 'SF Mono', monospace; font-size: 0.78rem; white-space: pre-wrap;
+    }
+</style>
+
+<div class="section-box">
+    <div class="sec-header">
+        <span>🧠</span>
+        <h3 data-i18n="project.generate">Generate with AI</h3>
+        <span class="text-dim" style="font-size:0.78rem" data-i18n="project.generate.desc">Describe what you want and AI builds it</span>
+    </div>
+    <textarea id="genPrompt" placeholder="e.g. A Python Flask REST API with SQLite, user authentication, and CRUD endpoints for a todo app..." data-i18n="project.generate.placeholder"></textarea>
+    <div class="row">
+        <input id="genName" placeholder="Project name (optional)" style="max-width:220px" data-i18n="project.name_optional">
+        <span class="text-dim" style="font-size:0.78rem" data-i18n="project.via">via</span>
+        <select id="genSource" class="btn">
+            <option value="online" data-i18n="project.source.online">☁ Online</option>
+            <option value="local" data-i18n="project.source.local">🖥 Local</option>
+        </select>
+        <button class="btn btn-primary" id="genBtn" onclick="generateProject()" data-i18n="gen.generate">🚀 Generate</button>
+    </div>
+    <div class="gen-log" id="genLog"></div>
+</div>
+
+<div class="section-box">
+    <div class="sec-header">
+        <span>📥</span>
+        <h3 data-i18n="project.import.title">Import project</h3>
+        <span class="text-dim" style="font-size:0.78rem" data-i18n="project.import.desc">Upload a .zip file</span>
+    </div>
+    <div class="import-zone" id="importZone" onclick="document.getElementById('importInput').click()">
+        <div style="font-size:2rem;margin-bottom:8px">📦</div>
+        <div class="text-dim" data-i18n="project.import.drop">Click or drag a .zip file here</div>
+        <input type="file" id="importInput" accept=".zip" style="display:none" onchange="importProject(this)">
+    </div>
+    <div id="importStatus" class="text-sm text-dim" style="margin-top:6px"></div>
+</div>
+
+<div class="flex-between mb-4" style="flex-wrap:wrap;gap:8px">
+    <div class="search-bar" style="flex:1;min-width:200px;margin:0">
+        <input id="projectSearch" placeholder="Search projects..." oninput="filterProjects()" data-i18n="project.search">
+        <select id="sortProjects" class="btn" onchange="loadProjects()" style="font-size:0.78rem">
+            <option value="name" data-i18n="project.sort.name">⬇ Name</option>
+            <option value="newest" data-i18n="project.sort.newest">🕐 Newest</option>
+            <option value="oldest" data-i18n="project.sort.oldest">🕐 Oldest</option>
+            <option value="files" data-i18n="project.sort.files">📄 Files</option>
+        </select>
+    </div>
+    <div class="flex gap-2">
+        <span class="text-dim text-sm" style="align-self:center" id="projectCountLabel"><span id="projectCount">0</span> projects</span>
+        <button class="btn" onclick="openCreateModal()" data-i18n="project.new">+ New</button>
+        <button class="btn" onclick="loadProjects()" data-i18n="project.refresh">🔄</button>
+    </div>
+</div>
+
+<div id="projectsList" class="project-list"></div>
+
+<!-- Create modal -->
+<div class="modal-overlay" id="createModal">
+    <div class="modal">
+        <h3 style="margin-bottom:16px" data-i18n="project.modal.title">New project</h3>
+        <div class="form-group">
+            <label data-i18n="project.modal.name">Name</label>
+            <input id="newName" placeholder="my-project" data-i18n="project.modal.name_placeholder">
+        </div>
+        <div class="form-group">
+            <label data-i18n="project.modal.template">Template</label>
+            <select id="newTemplate">
+                <option value="python">Python</option>
+                <option value="python-flask">Python Flask</option>
+                <option value="html">HTML</option>
+                <option value="node-js">Node.js</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label data-i18n="project.modal.custom_path">Custom path (optional)</label>
+            <input id="newPath" placeholder="Leave empty for default" data-i18n="project.modal.path_placeholder">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" onclick="closeModal('createModal')" data-i18n="common.cancel">Cancel</button>
+            <button class="btn btn-primary" onclick="createProject()" data-i18n="common.create">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Config modal -->
+<div class="modal-overlay" id="configModal">
+    <div class="modal">
+        <h3 style="margin-bottom:16px" data-i18n="project.config_modal.title">⚙️ Project settings</h3>
+        <input type="hidden" id="configName">
+        <div class="form-group">
+            <label data-i18n="project.config_modal.desc">Description</label>
+            <input id="cfgDesc" placeholder="Short description" data-i18n="project.config_modal.desc_placeholder">
+        </div>
+        <div class="form-group">
+            <label data-i18n="project.config_modal.run">Run command</label>
+            <input id="cfgRunCmd" placeholder="e.g. python main.py" data-i18n="project.config_modal.run_placeholder">
+        </div>
+        <div class="form-group">
+            <label data-i18n="project.config_modal.test">Test command</label>
+            <input id="cfgTestCmd" placeholder="e.g. pytest" data-i18n="project.config_modal.test_placeholder">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" onclick="closeModal('configModal')" data-i18n="common.cancel">Cancel</button>
+            <button class="btn btn-primary" onclick="saveProjectConfig()" data-i18n="common.save">Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentPreview = null;
+    let runControllers = {};
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('open');
+    }
+
+    function openCreateModal() {
+        document.getElementById('newName').value = '';
+        document.getElementById('newPath').value = '';
+        document.getElementById('createModal').classList.add('open');
+    }
+
+    async function createProject() {
+        const name = document.getElementById('newName').value.trim();
+        if (!name) { toast(__('commands.toast.name_required'), 'error'); return; }
+        const template = document.getElementById('newTemplate').value;
+        const path = document.getElementById('newPath').value.trim() || undefined;
+        try {
+            await api('/api/projects', {
+                method: 'POST',
+                body: JSON.stringify({ name, template, path }),
+            });
+            toast(__('project.toast.created'), 'success');
+            closeModal('createModal');
+            loadProjects();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    function escHtml(s) {
+        if (typeof s !== 'string') s = String(s || '');
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    async function api(url, opts) {
+        const resp = await fetch(url, opts);
+        if (!resp.ok) {
+            const body = await resp.text();
+            let msg;
+            try { msg = JSON.parse(body).error; } catch(e) { msg = body; }
+            throw new Error(msg || resp.statusText);
+        }
+        return resp.json();
+    }
+
+    // ── AI Generate ──
+
+    async function generateProject() {
+        const prompt = document.getElementById('genPrompt').value.trim();
+        if (!prompt) { toast(__('project.generate.desc'), 'error'); return; }
+        const name = document.getElementById('genName').value.trim() || undefined;
+        const source = document.getElementById('genSource').value;
+        const btn = document.getElementById('genBtn');
+        const log = document.getElementById('genLog');
+        btn.disabled = true; btn.textContent = __('gen.generating');
+        log.textContent = ''; log.classList.add('visible');
+        log.innerHTML = '<span class="gen-status">' + __('project.gen_status.starting') + '</span>\n';
+        try {
+            const resp = await fetch('/api/projects/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ prompt, name, source })
+            });
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, {stream: true});
+                const lines = buf.split('\n');
+                buf = lines.pop() || '';
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const d = JSON.parse(line.slice(6));
+                        if (d.type === 'status') {
+                            log.innerHTML += '<span class="gen-status">⏳ ' + escHtml(d.message) + '</span>\n';
+                            log.scrollTop = log.scrollHeight;
+                        } else if (d.type === 'done') {
+                            log.innerHTML += '<span class="gen-done">✅ ' + escHtml(d.message) + '</span>\n';
+                            toast(__('project.gen_status.done'), 'success');
+                            loadProjects();
+                        } else if (d.type === 'error') {
+                            log.innerHTML += '<span class="gen-error">❌ ' + escHtml(d.message) + '</span>\n';
+                            toast(d.message, 'error');
+                        }
+                    } catch(e) {}
+                }
+            }
+        } catch(e) {
+            log.innerHTML += '<span class="gen-error">❌ ' + escHtml(String(e)) + '</span>\n';
+            toast(__('project.gen_status.failed'), 'error');
+        }
+        btn.disabled = false; btn.textContent = __('gen.generate');
+    }
+
+    // ── Import ──
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const zone = document.getElementById('importZone');
+        zone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('dragover');
+        });
+        zone.addEventListener('dragleave', function() {
+            this.classList.remove('dragover');
+        });
+        zone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) uploadImport(file);
+        });
+    });
+
+    async function importProject(input) {
+        const file = input.files[0];
+        if (file) uploadImport(file);
+    }
+
+    async function uploadImport(file) {
+        if (!file.name.endsWith('.zip')) {
+            toast(__('project.import.desc'), 'error');
+            return;
+        }
+        const status = document.getElementById('importStatus');
+        status.textContent = __('common.loading');
+        const form = new FormData();
+        form.append('file', file);
+        form.append('name', file.name.replace('.zip', ''));
+        try {
+            const resp = await fetch('/api/projects/import', { method: 'POST', body: form });
+            if (!resp.ok) {
+                const err = await resp.text();
+                throw new Error(JSON.parse(err).error || err);
+            }
+            const meta = await resp.json();
+            status.textContent = __('project.toast.imported') + ' ' + meta.name;
+            toast(__('project.toast.imported'), 'success');
+            loadProjects();
+        } catch(e) {
+            status.textContent = __('common.error') + ': ' + e.message;
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    // ── Filter ──
+
+    let S_projects = [];
+
+    function filterProjects() {
+        const q = document.getElementById('projectSearch').value.toLowerCase();
+        document.querySelectorAll('.project-card').forEach(el => {
+            const name = el.dataset.name?.toLowerCase() || '';
+            const desc = el.dataset.description?.toLowerCase() || '';
+            const tech = el.dataset.tech?.toLowerCase() || '';
+            el.style.display = (!q || name.includes(q) || desc.includes(q) || tech.includes(q)) ? '' : 'none';
+        });
+    }
+
+    // ── File tree ──
+
+    function fileIcon(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        const icons = {
+            py: '🐍', js: '🟨', ts: '🔵', jsx: '⚛️', tsx: '⚛️',
+            html: '🌐', css: '🎨', json: '📋', yaml: '📋', yml: '📋',
+            md: '📝', txt: '📄', sh: '⚡', bash: '⚡',
+            sql: '🗄️', rs: '🦀', go: '🔷', java: '☕', c: '⚙️', cpp: '⚙️',
+            rb: '💎', php: '🐘', toml: '📋', cfg: '⚙️', ini: '⚙️',
+            gitignore: '🙈', dockerfile: '🐳', yml: '📋',
+            svg: '🖼️', png: '🖼️', jpg: '🖼️', ico: '🖼️',
+            lock: '🔒', vue: '💚', svelte: '🧡',
+        };
+        return icons[ext] || '📄';
+    }
+
+    function buildFileTree(files, name) {
+        const names = Object.keys(files).sort();
+        const tree = [];
+        const added = new Set();
+        for (const f of names) {
+            const parts = f.split('/');
+            for (let i = 1; i < parts.length; i++) {
+                const dir = parts.slice(0, i).join('/');
+                if (!added.has(dir)) {
+                    added.add(dir);
+                    tree.push({type: 'dir', path: dir + '/', indent: i - 1});
+                }
+            }
+            tree.push({type: 'file', path: f, indent: parts.length - 1});
+        }
+        let html = '';
+        for (const n of tree) {
+            const indent = 'padding-left:' + (n.indent * 16 + (n.type === 'dir' ? 0 : 16)) + 'px';
+            if (n.type === 'dir') {
+                html += `<div class="ft-item ft-dir" style="${indent}">📁 ${n.path}</div>`;
+            } else {
+                const icon = fileIcon(n.path);
+                html += `<div class="ft-item ft-file" style="${indent}" data-file="${escHtml(n.path)}" onclick="openEditor('${escHtml(name)}', '${escHtml(n.path)}', this)">${icon} ${n.path}</div>`;
+            }
+        }
+        html += `<div class="ft-item ft-new" style="padding-left:16px" onclick="promptNewFile('${escHtml(name)}')">+ ${__('project.editor.new_file')}</div>`;
+        return html;
+    }
+
+    // ── Editor with line numbers ──
+
+    function openEditor(name, filepath, el) {
+        const card = (el || document.querySelector('.project-card[data-name="' + escHtml(name) + '"]'));
+        const cardEl = el?.closest('.project-card') || document.querySelector('.project-card[data-name="' + name + '"]');
+        if (!cardEl) return;
+        document.querySelectorAll('.ft-file.active').forEach(e => e.classList.remove('active'));
+        if (el) el.classList.add('active');
+        const editor = cardEl.querySelector('.editor-wrap');
+        if (!editor) return;
+        editor.style.display = 'block';
+        const textarea = editor.querySelector('textarea');
+        const gutter = editor.querySelector('.editor-gutter');
+        const label = editor.querySelector('.eb-name');
+        label.textContent = filepath;
+        textarea.dataset.filepath = filepath;
+        api('/api/projects/' + encodeURIComponent(name) + '/preview?file=' + encodeURIComponent(filepath)).then(pr => {
+            const code = (pr.sources || {})[filepath] || '';
+            textarea.value = code;
+            updateGutter(textarea, gutter);
+            updateSyntaxPreview(name, filepath, code);
+        }).catch(() => {});
+    }
+
+    function updateGutter(textarea, gutter) {
+        const lines = textarea.value.split('\n').length;
+        const nums = Array.from({length: lines}, (_, i) => i + 1).join('\n');
+        gutter.textContent = nums;
+    }
+
+    function editorInput(textarea) {
+        const editor = textarea.closest('.editor-wrap');
+        const gutter = editor.querySelector('.editor-gutter');
+        updateGutter(textarea, gutter);
+        // Debounced syntax preview
+        clearTimeout(textarea._previewTimer);
+        textarea._previewTimer = setTimeout(() => {
+            const name = editor.closest('.project-card').dataset.name;
+            const fp = textarea.dataset.filepath;
+            updateSyntaxPreview(name, fp, textarea.value);
+        }, 500);
+    }
+
+    function updateSyntaxPreview(name, filepath, code) {
+        const card = document.querySelector('.project-card[data-name="' + name + '"]');
+        if (!card) return;
+        const preview = card.querySelector('.editor-preview');
+        if (!preview) return;
+        if (!code.trim()) { preview.innerHTML = ''; return; }
+        preview.textContent = code;
+        if (typeof hljs !== 'undefined') {
+            const ext = filepath.split('.').pop();
+            const langMap = {
+                py: 'python', js: 'javascript', ts: 'typescript', jsx: 'javascript', tsx: 'typescript',
+                html: 'html', css: 'css', json: 'json', yaml: 'yaml', yml: 'yaml',
+                md: 'markdown', sh: 'bash', bash: 'bash', sql: 'sql', rs: 'rust',
+                go: 'go', java: 'java', c: 'c', cpp: 'cpp', rb: 'ruby', php: 'php',
+            };
+            const lang = langMap[ext] || '';
+            if (lang) preview.className = 'language-' + lang;
+            hljs.highlightElement(preview);
+        }
+    }
+
+    function handleEditorKeydown(e, textarea) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            e.preventDefault();
+            const editor = textarea.closest('.editor-wrap');
+            const btn = editor.querySelector('.save-btn');
+            if (btn) btn.click();
+        }
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + '    ' + textarea.value.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + 4;
+            editorInput(textarea);
+        }
+    }
+
+    async function saveEditedFile(btn) {
+        const editor = btn.closest('.editor-wrap');
+        const textarea = editor.querySelector('textarea');
+        const filepath = textarea.dataset.filepath;
+        const content = textarea.value;
+        const name = btn.closest('.project-card').dataset.name;
+        try {
+            await api('/api/projects/' + encodeURIComponent(name) + '/file', {
+                method: 'PUT',
+                body: JSON.stringify({ filepath, content })
+            });
+            toast(__('project.toast.saved'), 'success');
+            const card = btn.closest('.project-card');
+            const previewContainer = card.querySelector('[id^="previewContainer-"]');
+            if (previewContainer) {
+                loadProjectPreview(name, previewContainer);
+            }
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function promptNewFile(name) {
+        const fp = prompt(__('project.editor.new_file') + ':');
+        if (!fp) return;
+        const card = document.querySelector('.project-card[data-name="' + name + '"]');
+        if (!card) return;
+        try {
+            await api('/api/projects/' + encodeURIComponent(name) + '/file', {
+                method: 'PUT',
+                body: JSON.stringify({ filepath: fp, content: '# ' + fp + '\n' })
+            });
+            toast(__('project.toast.created'), 'success');
+            const previewContainer = card.querySelector('[id^="previewContainer-"]');
+            if (previewContainer) loadProjectPreview(name, previewContainer);
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function deleteFileFromEditor(name, filepath, btn) {
+        if (!confirm(__('common.delete') + ' "' + filepath + '"?')) return;
+        try {
+            await api('/api/projects/' + encodeURIComponent(name) + '/delete-file', {
+                method: 'POST',
+                body: JSON.stringify({ filepath })
+            });
+            toast(__('project.toast.deleted'), 'success');
+            const card = (btn || document.querySelector('.project-card[data-name="' + name + '"]'));
+            const cardEl = btn?.closest('.project-card') || document.querySelector('.project-card[data-name="' + name + '"]');
+            if (cardEl) {
+                const pc = cardEl.querySelector('[id^="previewContainer-"]');
+                if (pc) loadProjectPreview(name, pc);
+            }
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    // ── Improve ──
+
+    function toggleImprove(btn) {
+        const section = btn.closest('.project-card').querySelector('.improve-section');
+        section.classList.toggle('open');
+        if (section.classList.contains('open')) section.querySelector('textarea').focus();
+    }
+
+    async function improveProject(btn) {
+        const card = btn.closest('.project-card');
+        const name = card.dataset.name;
+        const textarea = card.querySelector('.improve-section textarea');
+        const prompt = textarea.value.trim();
+        const log = card.querySelector('.improve-log');
+        if (!prompt) { toast(__('project.improve.empty'), 'error'); return; }
+        btn.disabled = true; btn.textContent = __('project.improve.analyzing');
+        log.textContent = ''; log.classList.add('visible');
+        log.innerHTML = '<span class="gen-status">' + __('project.improve.analyzing') + '</span>\n';
+        try {
+            const resp = await fetch('/api/projects/' + encodeURIComponent(name) + '/improve', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ prompt, source: 'online' })
+            });
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, {stream: true});
+                const lines = buf.split('\n');
+                buf = lines.pop() || '';
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const d = JSON.parse(line.slice(6));
+                        if (d.type === 'status') {
+                            log.innerHTML += '<span class="gen-status">⏳ ' + escHtml(d.message) + '</span>\n';
+                        } else if (d.type === 'done') {
+                            log.innerHTML += '<span class="gen-done">✅ ' + escHtml(d.message) + '</span>\n';
+                            toast(__('project.toast.improved'), 'success');
+                            loadProjects();
+                        } else if (d.type === 'error') {
+                            log.innerHTML += '<span class="gen-error">❌ ' + escHtml(d.message) + '</span>\n';
+                            toast(d.message, 'error');
+                        }
+                    } catch(e) {}
+                }
+            }
+        } catch(e) {
+            log.innerHTML += '<span class="gen-error">❌ ' + escHtml(String(e)) + '</span>\n';
+        }
+        btn.disabled = false; btn.textContent = __('project.improve');
+    }
+
+    function ansiToHtml(text) {
+        const map = {
+            '0': '', '1': 'font-weight:bold', '3': 'font-style:italic',
+            '30': 'color:#000', '31': 'color:#f85149', '32': 'color:#3fb950',
+            '33': 'color:#ffd33d', '34': 'color:#58a6ff', '35': 'color:#d2a8ff',
+            '36': 'color:#39c5cf', '37': 'color:#c9d1d9',
+            '90': 'color:#484f58', '91': 'color:#f85149', '92': 'color:#3fb950',
+            '93': 'color:#ffd33d', '94': 'color:#58a6ff', '95': 'color:#d2a8ff',
+            '96': 'color:#39c5cf', '97': 'color:#c9d1d9',
+        };
+        return escHtml(text).replace(/\x1b\[([\d;]+)m/g, (_, codes) => {
+            const styles = codes.split(';').map(c => map[c] || '').filter(Boolean);
+            return styles.length ? '</span><span style="' + styles.join(';') + '">' : '</span><span>';
+        }).replace(/<span><\/span>/g, '').replace(/<\/span><span[^>]*>/g, '');
+    }
+
+    // ── Actions ──
+
+    async function cloneProject(name) {
+        try {
+            const r = await api('/api/projects/' + encodeURIComponent(name) + '/clone', { method: 'POST' });
+            toast(__('project.toast.cloned', {name: r.name}), 'success');
+            loadProjects();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function renameProjectAction(name) {
+        const newName = prompt(__('project.rename') + ' "' + name + '":', name);
+        if (!newName || newName === name) return;
+        try {
+            await api('/api/projects/' + encodeURIComponent(name) + '/rename', {
+                method: 'POST',
+                body: JSON.stringify({ name: newName })
+            });
+            toast(__('project.toast.renamed', {name: newName}), 'success');
+            loadProjects();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    function downloadProject(name) {
+        window.open('/api/projects/' + encodeURIComponent(name) + '/download', '_blank');
+        toast(__('project.toast.downloading'), 'success');
+    }
+
+    function openConfig(name) {
+        const p = S_projects.find(x => x.name === name);
+        if (!p) return;
+        document.getElementById('configName').value = name;
+        document.getElementById('cfgDesc').value = p.description || '';
+        document.getElementById('cfgRunCmd').value = p.run_cmd || '';
+        document.getElementById('cfgTestCmd').value = p.test_cmd || '';
+        document.getElementById('configModal').classList.add('open');
+    }
+
+    async function saveProjectConfig() {
+        const name = document.getElementById('configName').value;
+        const description = document.getElementById('cfgDesc').value.trim();
+        const run_cmd = document.getElementById('cfgRunCmd').value.trim();
+        const test_cmd = document.getElementById('cfgTestCmd').value.trim();
+        try {
+            await api('/api/projects/' + encodeURIComponent(name) + '/config', {
+                method: 'PUT',
+                body: JSON.stringify({ description, run_cmd, test_cmd })
+            });
+            toast(__('project.toast.saved'), 'success');
+            closeModal('configModal');
+            loadProjects();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    // ── Live Run (SSE) ──
+
+    function runProject(name, file) {
+        const card = document.querySelector('.project-card[data-name="' + name + '"]');
+        if (!card) return;
+        let outputPane = card.querySelector('.output-pane-live');
+        if (!outputPane) {
+            card.insertAdjacentHTML('beforeend',
+                '<div class="output-pane-live"><div class="editor-bar"><span class="eb-name">' + __('project.run.output') + '</span><button class="btn btn-sm" onclick="stopRun(\'' + escHtml(name) + '\')">' + __('project.run.stop') + '</button><button class="btn btn-sm" onclick="this.closest(\'.output-pane-live\').querySelector(\'pre\').innerHTML=\'\'">' + __('project.run.clear') + '</button></div><pre id="runOutput-' + escHtml(name) + '"></pre></div>');
+            outputPane = card.querySelector('.output-pane-live');
+        }
+        outputPane.classList.add('open');
+        const pre = outputPane.querySelector('pre');
+        pre.innerHTML = '<span style="color:var(--blue)">' + __('project.run.starting') + '</span>\n';
+
+        // Close previous connection
+        if (runControllers[name]) {
+            runControllers[name].abort();
+        }
+        const controller = new AbortController();
+        runControllers[name] = controller;
+
+        const params = new URLSearchParams();
+        if (file) params.set('file', file);
+        fetch('/api/projects/' + encodeURIComponent(name) + '/run-stream?' + params.toString(), { signal: controller.signal })
+            .then(resp => {
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buf = '';
+                function pump() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) return;
+                        buf += decoder.decode(value, {stream: true});
+                        const lines = buf.split('\n');
+                        buf = lines.pop() || '';
+                        for (const line of lines) {
+                            if (!line.startsWith('data: ')) continue;
+                            try {
+                                const d = JSON.parse(line.slice(6));
+                                if (d.type === 'stdout') {
+                                    pre.innerHTML += ansiToHtml(d.line) + '\n';
+                                } else if (d.type === 'stderr') {
+                                    pre.innerHTML += '<span style="color:var(--orange)">' + ansiToHtml(d.line) + '</span>\n';
+                                } else if (d.type === 'status') {
+                                    pre.innerHTML += '<span style="color:var(--blue)">⏳ ' + escHtml(d.message) + '</span>\n';
+                                } else if (d.type === 'done') {
+                                    const color = d.returncode === 0 ? 'var(--green)' : 'var(--red)';
+                                    pre.innerHTML += '\n<span style="color:' + color + '">✅ Exit: ' + d.returncode + '</span>\n';
+                                } else if (d.type === 'error') {
+                                    pre.innerHTML += '<span style="color:var(--red)">❌ ' + escHtml(d.message) + '</span>\n';
+                                }
+                                pre.scrollTop = pre.scrollHeight;
+                            } catch(e) {}
+                        }
+                        pump();
+                    }).catch(err => {
+                        if (err.name !== 'AbortError') {
+                            pre.innerHTML += '<span style="color:var(--red)">❌ ' + escHtml(err.message) + '</span>\n';
+                        }
+                    });
+                }
+                pump();
+            }).catch(err => {
+                if (err.name !== 'AbortError') {
+                    pre.innerHTML += '<span style="color:var(--red)">❌ ' + escHtml(err.message) + '</span>\n';
+                }
+            });
+    }
+
+    function stopRun(name) {
+        if (runControllers[name]) {
+            runControllers[name].abort();
+            delete runControllers[name];
+        }
+        const pre = document.getElementById('runOutput-' + name);
+        if (pre) pre.textContent += __('project.run.stopped') + '\n';
+    }
+
+    function testProject(name) {
+        runProject(name, null); // Will run test_cmd
+    }
+
+    // ── Load projects ──
+
+    async function loadProjectPreview(projectName, container) {
+        try {
+            const pr = await api('/api/projects/' + encodeURIComponent(projectName) + '/preview');
+            const sources = pr.sources || {};
+            const output = pr.output || {};
+            const fileNames = Object.keys(sources);
+            container.innerHTML = `
+                <div class="file-tree">${buildFileTree(sources, projectName)}</div>
+                <div class="editor-wrap" style="display:none">
+                    <div class="editor-bar">
+                        <span class="eb-name">${__('project.editor.select')}</span>
+                        <button class="btn btn-sm save-btn" onclick="saveEditedFile(this)" style="font-size:0.7rem">${__('project.editor.save')}</button>
+                        <button class="btn btn-sm" onclick="deleteFileFromEditor('${escHtml(projectName)}', this.dataset.fp, this)" style="font-size:0.7rem;display:none" id="delBtn-${escHtml(projectName)}">${__('project.editor.delete')}</button>
+                    </div>
+                    <div class="editor-body">
+                        <div class="editor-gutter">1</div>
+                        <textarea spellcheck="false" oninput="editorInput(this)" onkeydown="handleEditorKeydown(event, this)" data-filepath=""></textarea>
+                    </div>
+                    <div style="margin-top:2px"><pre class="editor-preview" style="padding:8px 12px;background:#0d1117;border:1px solid var(--border);border-radius:4px;font-size:0.8rem;max-height:150px;overflow:auto;display:none"></pre></div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+                    <button class="btn btn-sm" onclick="runProject('${escHtml(projectName)}')">${__('project.run')}</button>
+                    <button class="btn btn-sm" onclick="testProject('${escHtml(projectName)}')">${__('project.test')}</button>
+                    <button class="btn btn-sm" onclick="downloadProject('${escHtml(projectName)}')">${__('project.download')}</button>
+                    <button class="btn btn-sm" onclick="toggleImprove(this)">${__('project.improve')}</button>
+                    <button class="btn btn-sm" onclick="renameProjectAction('${escHtml(projectName)}')">${__('project.rename')}</button>
+                    <button class="btn btn-sm" onclick="openConfig('${escHtml(projectName)}')">${__('project.config')}</button>
+                    <button class="btn btn-sm" onclick="cloneProject('${escHtml(projectName)}')">${__('project.clone')}</button>
+                </div>
+                <div class="improve-section">
+                    <textarea placeholder="${__('project.improve.placeholder')}" style="margin-bottom:6px"></textarea>
+                    <div class="improve-log gen-log"></div>
+                    <button class="btn btn-sm btn-primary" onclick="improveProject(this)">${__('project.improve')}</button>
+                </div>
+                <div class="split-view" style="margin-top:8px">
+                    <div class="code-pane" id="preview-${escHtml(projectName)}">
+                        <div class="pane-label">${__('project.run.output')}</div>
+                        ${output.stdout ? '<pre class="success">' + escHtml(output.stdout) + '</pre>' : ''}
+                        ${output.stderr ? '<pre class="error">' + escHtml(output.stderr) + '</pre>' : ''}
+                        ${!output.stdout && !output.stderr ? '<span class="text-dim">' + __('project.run.empty') + '</span>' : ''}
+                        <div class="text-dim" style="margin-top:4px">${__('project.run.exit', {code: output.returncode ?? '-'})}</div>
+                    </div>
+                    <div class="output-pane">
+                        <div class="pane-label">${__('project.files_pane')}</div>
+                        <div class="text-dim" style="font-size:0.75rem">${__('project.files_count', {count: fileNames.length})}</div>
+                        <div style="margin-top:4px;font-size:0.72rem;color:var(--text-dim)">${fileNames.map(f => '📄 ' + escHtml(f)).join('<br>')}</div>
+                    </div>
+                </div>`;
+            // Show delete button only when a file is open
+            const editor = container.querySelector('.editor-wrap');
+            const obs = new MutationObserver(() => {
+                const fp = editor.querySelector('textarea').dataset.filepath;
+                const delBtn = container.querySelector('[id^="delBtn-"]');
+                if (delBtn) {
+                    delBtn.style.display = fp ? '' : 'none';
+                    delBtn.dataset.fp = fp;
+                }
+            });
+            obs.observe(editor, { attributes: true, subtree: true, attributeFilter: ['data-filepath'] });
+        } catch(e) {
+            container.innerHTML = '<div class="text-dim">' + __('project.preview') + ' ' + __('common.error') + '</div>';
+        }
+    }
+
+    async function loadProjects() {
+        try {
+            S_projects = await api('/api/projects');
+            // Sort
+            const sort = document.getElementById('sortProjects').value;
+            S_projects.sort((a, b) => {
+                if (sort === 'name') return a.name.localeCompare(b.name);
+                if (sort === 'newest') return (b.created || '').localeCompare(a.created || '');
+                if (sort === 'oldest') return (a.created || '').localeCompare(b.created || '');
+                if (sort === 'files') return (b.files_count || 0) - (a.files_count || 0);
+                return 0;
+            });
+            const countEl = document.getElementById('projectCount');
+            if (countEl) countEl.textContent = S_projects.length;
+            const el = document.getElementById('projectsList');
+            if (!S_projects.length) {
+                el.innerHTML = '<div style="text-align:center;padding:40px;max-width:400px;margin:0 auto">' +
+                    '<div style="font-size:3rem;margin-bottom:12px">🏗️</div>' +
+                    '<h3 style="margin-bottom:8px">' + __('project.empty') + '</h3>' +
+                    '<div class="text-dim" style="margin-bottom:16px;font-size:0.85rem">' +
+                    __('project.empty.hint1') + '<br>' +
+                    __('project.empty.hint2') + '<br>' +
+                    __('project.empty.hint3') +
+                    '</div></div>';
+                return;
+            }
+            el.innerHTML = S_projects.map((p) => {
+                const genBadge = p.template === 'ai-generated'
+                    ? '<span style="font-size:0.65rem;padding:1px 6px;border-radius:4px;background:rgba(88,166,255,0.1);color:var(--blue)">' + __('project.badge.ai') + '</span>'
+                    : '';
+                const techTags = (p.tech_stack || []).map(t => `<span class="tag">${escHtml(t)}</span>`).join('');
+                return `<div class="project-card" data-name="${escHtml(p.name)}" data-description="${escHtml(p.description || '')}" data-tech="${escHtml((p.tech_stack||[]).join(' '))}">
+                    <div class="flex-between" style="flex-wrap:wrap;gap:8px">
+                        <div style="flex:1;min-width:0">
+                            <h3>${escHtml(p.name)} ${genBadge}</h3>
+                            <div class="meta">
+                                ${p.description ? '<span>' + escHtml(p.description) + '</span>' : ''}
+                                <span>📦 ${escHtml(p.template)}</span>
+                                ${techTags}
+                                <span>${__('project.files_count', {count: p.files_count ?? '?'})}</span>
+                                <span>🕐 ${escHtml(p.created || '')}</span>
+                            </div>
+                        </div>
+                        <div class="project-actions">
+                            <button class="btn btn-sm" onclick="runProject('${escHtml(p.name)}')">▶ <span class="btn-label">${__('project.run')}</span></button>
+                            <button class="btn btn-sm" onclick="testProject('${escHtml(p.name)}')">🧪 <span class="btn-label">${__('project.test')}</span></button>
+                            <button class="btn btn-sm" onclick="downloadProject('${escHtml(p.name)}')">⬇</button>
+                            <button class="btn btn-sm" onclick="openConfig('${escHtml(p.name)}')">⚙️</button>
+                            <button class="btn btn-sm" onclick="cloneProject('${escHtml(p.name)}')">📋</button>
+                            <button class="btn btn-sm" onclick="deleteProject('${escHtml(p.name)}')">✕</button>
+                        </div>
+                    </div>
+                    <div style="margin-top:8px">
+                        <button class="btn btn-sm" onclick="togglePreview('${escHtml(p.name)}', this)">📄 <span class="btn-label">${__('project.preview')}</span></button>
+                    </div>
+                    <div id="previewContainer-${escHtml(p.name)}" class="hidden" style="margin-top:8px">
+                        <div class="text-dim" data-i18n="common.loading">Loading...</div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            document.getElementById('projectsList').innerHTML = '<div class="text-dim" style="text-align:center;padding:40px">' + __('common.error') + ': ' + e.message + '</div>';
+        }
+    }
+
+    async function togglePreview(name, btn) {
+        const container = document.getElementById('previewContainer-' + name);
+        const showing = !container.classList.contains('hidden');
+        if (showing) {
+            container.classList.add('hidden');
+            btn.innerHTML = '📄 <span class="btn-label">' + __('project.preview') + '</span>';
+        } else {
+            container.classList.remove('hidden');
+            btn.innerHTML = '📄 <span class="btn-label">' + __('project.hide') + '</span>';
+            loadProjectPreview(name, container);
+        }
+    }
+
+    async function deleteProject(name) {
+        if (!confirm(__('project.confirm_delete', {name: name}))) return;
+        try {
+            await api('/api/projects/' + encodeURIComponent(name), { method: 'DELETE' });
+            toast(__('project.toast.deleted'), 'success');
+            loadProjects();
+        } catch(e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    // ── Keyboard shortcuts ──
+
+    document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            e.preventDefault();
+            document.getElementById('genPrompt').focus();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+            e.preventDefault();
+            openCreateModal();
+        }
+    });
+
+    // ── Auto-refresh: reload list every 30s (only if page visible) ──
+    setInterval(function() {
+        if (!document.hidden) loadProjects();
+    }, 30000);
+
+    loadProjects();
+</script>
+{% endblock %}

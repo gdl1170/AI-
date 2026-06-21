@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% block title %}{{ note.title }}{% endblock %}
+{% block heading %}📝 {{ note.title }}{% endblock %}
+{% block content %}
+<style>
+    .note-view { max-width: 800px; margin: 0 auto; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
+    .note-view .meta { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .note-view .body { line-height: 1.8; font-size: 0.95rem; }
+    .note-view .body a.wiki-link { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+    .note-view .body a.wiki-link.broken { color: var(--orange); }
+    .note-view .body code { background: var(--bg-dim); padding: 1px 4px; border-radius: 3px; font-size: 0.85em; }
+    .note-view .body pre { background: var(--bg-dim); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; }
+    .tag { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 3px; background: var(--bg-dim); color: var(--accent); margin: 2px; }
+    .backlinks { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .backlinks a { display: block; padding: 6px 0; color: var(--accent); font-size: 0.9rem; }
+    .actions { margin-top: 16px; display: flex; gap: 8px; }
+</style>
+
+<div class="note-view">
+    <h2>{{ note.title }}</h2>
+    <div class="meta">
+        {% for t in note.tags %}<span class="tag">#{{ t }}</span> {% endfor %}
+        {% if note.created %} · <span data-i18n="note_view.created">Creato:</span> {{ note.created[:10] }}{% endif %}
+        {% if note.modified %} · <span data-i18n="note_view.modified">Modificato:</span> {{ note.modified[:10] }}{% endif %}
+        · <span data-i18n="note_view.links">{{ note.links|length }} link</span> · <span data-i18n="note_view.backlinks">{{ note.backlinks|length }} backlink</span>
+    </div>
+    <div class="body">
+        <pre style="white-space:pre-wrap;font-family:inherit;background:none;border:none;padding:0;margin:0;line-height:1.8">{{ note.body }}</pre>
+    </div>
+
+    {% if note.backlinks %}
+    <div class="backlinks">
+        <strong data-i18n="note_view.backlink_heading">🔗 Backlink ({{ note.backlinks|length }})</strong>
+        {% for b in note.backlinks %}
+        <a href="/notes/{{ b.slug }}">← {{ b.title }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="actions">
+        <a href="/notes" class="btn" data-i18n="note_view.back_to_all">← Tutte le note</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %}{{ code }} Error{% endblock %}
+{% block heading %}{% endblock %}
+{% block content %}
+<style>
+    .error-page { text-align: center; padding: 80px 20px; max-width: 500px; margin: 0 auto; }
+    .error-page .code { font-size: 5rem; font-weight: 800; background: linear-gradient(135deg, var(--blue), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .error-page .msg { font-size: 1.1rem; color: var(--text-dim); margin: 16px 0 32px; }
+</style>
+<div class="error-page">
+    <div class="code">{{ code }}</div>
+    <div class="msg">{{ message }}</div>
+    <a href="/" class="btn btn-primary" data-i18n="nav.chat">🏠 Torna alla Chat</a>
+</div>
+{% endblock %}

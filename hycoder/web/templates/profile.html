@@ -1,0 +1,120 @@
+{% extends "layout.html" %}
+{% block heading %}🔐 Profili e Login{% endblock %}
+{% block content %}
+<div style="max-width:500px;margin:0 auto">
+  <div id="profileNotLogged">
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="margin:0 0 12px;font-size:1rem">Accedi</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input type="text" id="loginUsername" placeholder="Username" class="input" style="max-width:300px">
+        <input type="password" id="loginPassword" placeholder="Password" class="input" style="max-width:300px">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-primary" onclick="profileLogin()">🔑 Login</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 12px;font-size:1rem">Crea nuovo profilo</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input type="text" id="newUsername" placeholder="Username" class="input" style="max-width:300px">
+        <input type="password" id="newPassword" placeholder="Password (opzionale)" class="input" style="max-width:300px">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="profileCreate()">➕ Crea</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="profileLogged" style="display:none">
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <span style="font-size:2rem">👤</span>
+        <div>
+          <div style="font-weight:600;font-size:1.1rem" id="profileCurrentNamePage">-</div>
+          <div class="text-dim text-sm" id="profileCurrentMeta">Utente attivo</div>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="profileLogout()">🚪 Logout</button>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 12px;font-size:1rem">Cambia profilo</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="profileSwitchSelectPage" class="input" style="max-width:200px"></select>
+        <button class="btn btn-sm" onclick="profileSwitch()">🔄 Cambia</button>
+        <button class="btn btn-sm btn-danger" onclick="profileDelete()">🗑 Elimina</button>
+      </div>
+    </div>
+  </div>
+  <div id="profileResult" class="text-sm" style="margin-top:12px"></div>
+</div>
+
+<script>
+  async function loadPageProfile() {
+    try {
+      const r = await api('/api/profiles');
+      const logged = !!r.current;
+      document.getElementById('profileNotLogged').style.display = logged ? 'none' : '';
+      document.getElementById('profileLogged').style.display = logged ? '' : 'none';
+      if (logged) {
+        document.getElementById('profileCurrentNamePage').textContent = r.current;
+        const sel = document.getElementById('profileSwitchSelectPage');
+        sel.innerHTML = r.profiles.filter(p => p !== r.current)
+          .map(p => `<option value="${p}">${p}</option>`).join('');
+        sel.disabled = !sel.options.length;
+      }
+    } catch(e) {}
+  }
+
+  async function profileLogin() {
+    const u = document.getElementById('loginUsername').value.trim();
+    const p = document.getElementById('loginPassword').value;
+    if (!u) return toast('Inserisci username', 'warn');
+    try {
+      await api('/api/profiles/login', { method: 'POST', body: JSON.stringify({ username: u, password: p }) });
+      toast('✅ Login effettuato come ' + u, 'success');
+      loadPageProfile();
+    } catch(e) { toast('❌ ' + e.message, 'error'); }
+  }
+
+  async function profileLogout() {
+    await api('/api/profiles/logout', { method: 'POST' });
+    toast('✅ Logout effettuato', 'info');
+    loadPageProfile();
+  }
+
+  async function profileCreate() {
+    const u = document.getElementById('newUsername').value.trim();
+    const p = document.getElementById('newPassword').value;
+    if (!u) return toast('Inserisci username', 'warn');
+    try {
+      await api('/api/profiles/create', { method: 'POST', body: JSON.stringify({ username: u, password: p }) });
+      toast('✅ Profilo creato: ' + u, 'success');
+      document.getElementById('newUsername').value = '';
+      document.getElementById('newPassword').value = '';
+      loadPageProfile();
+    } catch(e) { toast('❌ ' + e.message, 'error'); }
+  }
+
+  async function profileSwitch() {
+    const u = document.getElementById('profileSwitchSelectPage').value;
+    if (!u) return;
+    try {
+      await api('/api/profiles/switch', { method: 'POST', body: JSON.stringify({ username: u }) });
+      toast('✅ Passato a ' + u, 'success');
+      loadPageProfile();
+    } catch(e) { toast('❌ ' + e.message, 'error'); }
+  }
+
+  async function profileDelete() {
+    const u = document.getElementById('profileSwitchSelectPage').value;
+    if (!u) return;
+    if (!confirm('Eliminare il profilo "' + u + '"?')) return;
+    try {
+      await api('/api/profiles/delete', { method: 'POST', body: JSON.stringify({ username: u }) });
+      toast('✅ Profilo eliminato: ' + u, 'success');
+      loadPageProfile();
+    } catch(e) { toast('❌ ' + e.message, 'error'); }
+  }
+
+  loadPageProfile();
+</script>
+{% endblock %}

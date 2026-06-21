@@ -1,0 +1,587 @@
+{% extends "layout.html" %}
+{% block title %}Commands{% endblock %}
+{% block heading %}⌨️ Commands{% endblock %}
+{% block content %}
+<style>
+    @import url('https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css');
+    .cmd-sidebar { display: flex; gap: 16px; min-height: 70vh; }
+    .cmd-sidebar .cmd-list { flex: 1; min-width: 0; overflow-y: auto; }
+    .cmd-sidebar .term-panel { flex: 1.5; min-width: 0; display: flex; flex-direction: column; }
+    .cmd-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .cmd-info h4 { font-size: 0.95rem; margin-bottom: 4px; }
+    .cmd-info h4 code { color: var(--blue); font-weight: 400; }
+    .cmd-info p { font-size: 0.8rem; color: var(--text-dim); }
+    .cmd-meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; display: flex; gap: 12px; }
+    .cmd-actions { display: flex; gap: 4px; }
+    .cmd-preview { font-family: 'SF Mono', monospace; font-size: 0.75rem; background: var(--bg); padding: 8px; border-radius: 4px; margin-top: 6px; color: var(--text-dim); white-space: pre-wrap; max-height: 60px; overflow: hidden; }
+    #terminal-container { width: 100%; height: 480px; background: #0d1117; border-radius: 0 0 6px 6px; overflow: hidden; }
+    .terminal-card { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .terminal-card .card-header { display: flex; justify-content: space-between; align-items: center; background: #1a1f2e; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .terminal-card .card-header h3 { font-size: 0.85rem; color: var(--text-dim); font-weight: 500; }
+    .terminal-card .card-header .term-dots { display: flex; gap: 6px; }
+    .terminal-card .card-header .term-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .terminal-card .card-header .term-dot.red { background: #ff5f57; }
+    .terminal-card .card-header .term-dot.yellow { background: #febc2e; }
+    .terminal-card .card-header .term-dot.green { background: #28c840; }
+    .terminal-tab-bar { display: flex; gap: 4px; margin-bottom: 12px; }
+    .terminal-tab-btn { padding: 8px 16px; border-radius: 6px 6px 0 0; font-size: 0.85rem; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-bottom: none; color: var(--text-dim); }
+    .terminal-tab-btn.active { background: var(--bg); color: var(--text); border-bottom: 1px solid var(--bg); }
+    .terminal-card ::-webkit-scrollbar { width: 6px; }
+    .terminal-card ::-webkit-scrollbar-track { background: transparent; }
+    .terminal-card ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    @media (max-width: 768px) {
+        .cmd-sidebar { flex-direction: column; }
+        .cmd-sidebar .term-panel { min-height: 50vh; }
+    }
+</style>
+
+<div class="flex-between mb-4">
+    <div class="text-dim text-sm"><span id="cmdCount">0</span> custom commands</div>
+    <button class="btn btn-primary" onclick="openCmdModal()" data-i18n="commands.new_cmd">+ New command</button>
+</div>
+
+<div class="cmd-sidebar">
+    <div class="cmd-list">
+        <details style="margin-bottom:16px;max-width:100%">
+            <summary style="cursor:pointer;font-size:0.85rem;color:var(--text-dim)" data-i18n="commands.all">📖 All available commands (CLI + slash)</summary>
+            <div id="systemCommands" style="margin-top:8px;font-size:0.82rem"></div>
+        </details>
+
+        <div id="commandsList">
+            <div class="text-dim" style="text-align:center;padding:40px" data-i18n="common.loading">Loading...</div>
+        </div>
+    </div>
+
+    <div class="term-panel">
+        <div class="terminal-card" style="height:100%;display:flex;flex-direction:column">
+            <div class="card-header">
+                <div class="term-dots">
+                    <span class="term-dot red"></span>
+                    <span class="term-dot yellow"></span>
+                    <span class="term-dot green"></span>
+                </div>
+                <h3 data-i18n="commands.terminal">💻 Terminal</h3>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <span id="termCwd" class="text-dim" style="font-size:0.75rem;font-family:monospace"></span>
+                    <button class="btn btn-sm" onclick="termReset()" data-i18n="commands.terminal.reset" data-i18n-title="commands.terminal.reset_title" title="Reset">↺</button>
+                    <button class="btn btn-sm" onclick="termKill()" data-i18n="commands.terminal.kill" data-i18n-title="commands.terminal.kill_title" title="Interrompi (Ctrl+C)">■</button>
+                </div>
+            </div>
+            <div id="terminal-container" style="flex:1;min-height:400px;background:#0d1117;border-radius:0 0 6px 6px;overflow:hidden"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="cmdModal">
+    <div class="modal">
+        <h3 id="cmdModalTitle" data-i18n="commands.modal.title_new">Nuovo comando</h3>
+        <div class="form-group">
+            <label data-i18n="commands.modal.name">Nome comando</label>
+            <input id="cmdName" data-i18n="commands.modal.name_placeholder" placeholder="es. deploy, test, lint">
+        </div>
+        <div class="form-group">
+            <label data-i18n="commands.modal.description">Descrizione</label>
+            <input id="cmdDesc" data-i18n="commands.modal.description_placeholder" placeholder="Cosa fa questo comando...">
+        </div>
+        <div class="form-group">
+            <label data-i18n="commands.modal.source">Sorgente AI preferita</label>
+            <select id="cmdSource">
+                <option value="auto" data-i18n="commands.modal.source_auto">Auto (routing ibrido)</option>
+                <option value="local" data-i18n="commands.modal.source_local">Solo locale</option>
+                <option value="online" data-i18n="commands.modal.source_online">Solo online</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label data-i18n="commands.modal.prompt">Prompt template</label>
+            <textarea id="cmdPrompt" rows="5" data-i18n="commands.modal.prompt_placeholder" placeholder="Istruzioni da eseguire quando viene invocato questo comando..."></textarea>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" onclick="closeCmdModal()" data-i18n="common.cancel">Annulla</button>
+            <button class="btn btn-primary" id="saveCmdBtn" onclick="saveCmd()" data-i18n="common.save">Salva</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+    let editingCmd = null;
+
+    function openCmdModal(data) {
+        editingCmd = data || null;
+        document.getElementById('cmdModalTitle').textContent = data ? __('commands.modal.title_edit', {name: data.name}) : __('commands.modal.title_new');
+        document.getElementById('cmdName').value = data ? data.name : '';
+        document.getElementById('cmdName').disabled = !!data;
+        document.getElementById('cmdDesc').value = data ? (data.description || '') : '';
+        document.getElementById('cmdSource').value = data ? (data.source || 'auto') : 'auto';
+        document.getElementById('cmdPrompt').value = data ? (data.prompt || '') : '';
+        document.getElementById('cmdModal').classList.add('open');
+    }
+
+    function closeCmdModal() {
+        document.getElementById('cmdModal').classList.remove('open');
+        editingCmd = null;
+    }
+
+    async function saveCmd() {
+        const name = document.getElementById('cmdName').value.trim();
+        if (!name) { toast(__('commands.toast.name_required'), 'error'); return; }
+
+        const data = {
+            name,
+            description: document.getElementById('cmdDesc').value.trim(),
+            source: document.getElementById('cmdSource').value,
+            prompt: document.getElementById('cmdPrompt').value.trim(),
+        };
+
+        try {
+            if (editingCmd) {
+                await api('/api/commands/' + encodeURIComponent(name), { method: 'PUT', body: JSON.stringify(data) });
+                toast(__('commands.toast.updated'), 'success');
+            } else {
+                await api('/api/commands', { method: 'POST', body: JSON.stringify(data) });
+                toast(__('commands.toast.created'), 'success');
+            }
+            closeCmdModal();
+            loadCommands();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function deleteCmd(name) {
+        if (!confirm(__('commands.delete.confirm', {name: name}))) return;
+        try {
+            await api('/api/commands/' + encodeURIComponent(name), { method: 'DELETE' });
+            toast(__('commands.delete.deleted'), 'success');
+            loadCommands();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function runCmd(name) {
+        try {
+            const cmd = await api('/api/commands/' + encodeURIComponent(name));
+            sessionStorage.setItem('hybrid_run_cmd', JSON.stringify({ name: cmd.name, prompt: cmd.prompt }));
+            toast(__('commands.run.toast', {name: name}), 'success');
+            window.location.href = '/chat';
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function loadCommands() {
+        try {
+            const cmds = await api('/api/commands');
+            const cmdCountSpan = document.getElementById('cmdCount');
+            cmdCountSpan.textContent = __('commands.counter', {count: cmds.length});
+            let n = cmdCountSpan.nextSibling;
+            while (n) { let t = n; n = n.nextSibling; t.parentNode.removeChild(t); }
+            const el = document.getElementById('commandsList');
+            if (!cmds.length) {
+                el.innerHTML = '<div class="text-dim" style="text-align:center;padding:40px">' + __('commands.list.empty') + '</div>';
+                return;
+            }
+            el.innerHTML = cmds.map(c => `
+                <div class="cmd-card">
+                    <div class="cmd-info">
+                        <h4><code>/${esc(c.name)}</code></h4>
+                        <p>${esc(c.description || __('commands.card.no_description'))}</p>
+                        ${c.prompt ? '<div class="cmd-preview">' + esc(c.prompt.slice(0, 200)) + '</div>' : ''}
+                        <div class="cmd-meta">
+                            <span>${__('commands.card.source', {source: c.source || 'auto'})}</span>
+                        </div>
+                    </div>
+                    <div class="cmd-actions">
+                        <button class="btn btn-sm btn-primary" onclick="termInsert('/${esc(c.name)} ')" title="Run in terminal" style="font-weight:600">▸</button>
+                        <button class="btn btn-sm" onclick='openCmdModal(${JSON.stringify(c).replace(/'/g, "&#39;")})'>✏</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteCmd('${c.name}')">✕</button>
+                    </div>
+                </div>
+            `).join('');
+        } catch(e) {
+            document.getElementById('commandsList').innerHTML = '<div class="text-dim" style="text-align:center;padding:40px">' + __('common.error') + ': ' + e.message + '</div>';
+        }
+    }
+
+    function termInsert(cmdText) {
+        if (!term) return;
+        // Append the command text to current buffer
+        termBuffer += cmdText;
+        term.write(cmdText);
+        term.focus();
+    }
+
+    async function loadSystemCommands() {
+        try {
+            const c = await api('/api/commands/list');
+            const el = document.getElementById('systemCommands');
+            let html = '';
+            for (const [group, cmds] of Object.entries(c)) {
+                const isSlash = group === 'slash';
+                html += `<strong style="color:var(--accent);text-transform:uppercase;font-size:0.7rem">${group}</strong><br>`;
+                html += cmds.map(cmd => {
+                    const insertText = (isSlash ? cmd.name : 'ai-plus ' + cmd.name) + ' ';
+                    return `<div style="padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="termInsert('${esc(insertText)}')" title="Click to insert in terminal">
+                        <code style="color:var(--blue)">${esc(cmd.name)}</code>
+                        <span class="text-dim"> — ${esc(cmd.desc)}</span>
+                    </div>`;
+                }).join('');
+            }
+            el.innerHTML = html;
+        } catch(e) {}
+    }
+
+    // ── Terminal ─────────────────────────────────────────────────
+    let term = null;
+    let termFit = null;
+    let termAbort = null;
+    let termBuffer = '';
+    let termCwd = '~';
+    let termCustomCommands = [];
+    let termHistory = [];
+    let termHistoryIdx = -1;
+    let termSuggestions = [];
+    let termSuggestionIdx = -1;
+
+    async function loadTermCommands() {
+        try {
+            termCustomCommands = await api('/api/commands');
+        } catch(e) { /* fallback silenzioso */ }
+    }
+
+    function termInit() {
+        const container = document.getElementById('terminal-container');
+        if (!container) return;
+
+        term = new Terminal({
+            cursorBlink: true,
+            cursorStyle: 'block',
+            fontSize: 13,
+            fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+            theme: {
+                background: '#0d1117', foreground: '#c9d1d9',
+                cursor: '#58a6ff', selectionBackground: '#264f78',
+                black: '#484f58', red: '#ff7b72', green: '#3fb950',
+                yellow: '#d29922', blue: '#58a6ff', magenta: '#bc8cff',
+                cyan: '#39c5cf', white: '#c9d1d9',
+                brightBlack: '#6e7681', brightRed: '#ffa198',
+                brightGreen: '#56d364', brightYellow: '#e3b341',
+                brightBlue: '#79c0ff', brightMagenta: '#d2a8ff',
+                brightCyan: '#56d4dd', brightWhite: '#ffffff',
+            },
+            allowTransparency: false,
+            scrollback: 5000,
+        });
+
+        termFit = new FitAddon.FitAddon();
+        term.loadAddon(termFit);
+        term.open(container);
+        termFit.fit();
+
+        term.onResize(() => { try { termFit.fit(); } catch(e) {} });
+
+        const savedCwd = localStorage.getItem('termCwd');
+        termCwd = savedCwd || '~';
+        updateTermCwd();
+
+        loadTermCommands();
+
+        term.write('\x1b[32m' + __('commands.terminal.welcome') + '\x1b[0m\r\n');
+        term.write('\r\n');
+        writePrompt();
+
+        term.onData(data => {
+            if (termAbort) {
+                if (data === '\x03') termKill();
+                return;
+            }
+            if (data === '\r') {
+                const cmd = termBuffer.trim();
+                termBuffer = '';
+                term.write('\r\n');
+                if (cmd) {
+                    if (cmd !== termHistory[termHistory.length - 1]) termHistory.push(cmd);
+                    termHistoryIdx = termHistory.length;
+                    termExec(cmd);
+                } else {
+                    writePrompt();
+                }
+            } else if (data === '\x7f') {
+                if (termBuffer.length > 0) {
+                    termBuffer = termBuffer.slice(0, -1);
+                    term.write('\b \b');
+                }
+            } else if (data === '\x03') {
+                termBuffer = '';
+                term.write('^C\r\n');
+                writePrompt();
+            } else if (data === '\x1b[A') {
+                if (termHistory.length > 0 && termHistoryIdx > 0) {
+                    termHistoryIdx--;
+                    const prev = termHistory[termHistoryIdx];
+                    // Clear current line
+                    while (termBuffer.length > 0) {
+                        term.write('\b \b');
+                        termBuffer = termBuffer.slice(0, -1);
+                    }
+                    termBuffer = prev;
+                    term.write(prev);
+                }
+            } else if (data === '\x1b[B') {
+                if (termHistoryIdx < termHistory.length - 1) {
+                    termHistoryIdx++;
+                    const prev = termHistory[termHistoryIdx];
+                    while (termBuffer.length > 0) {
+                        term.write('\b \b');
+                        termBuffer = termBuffer.slice(0, -1);
+                    }
+                    termBuffer = prev;
+                    term.write(prev);
+                } else if (termHistoryIdx === termHistory.length - 1) {
+                    termHistoryIdx = termHistory.length;
+                    while (termBuffer.length > 0) {
+                        term.write('\b \b');
+                        termBuffer = termBuffer.slice(0, -1);
+                    }
+                }
+            } else if (data === '\t') {
+                if (termBuffer.length > 0) termTabComplete();
+            } else if (data >= ' ') {
+                termBuffer += data;
+                term.write(data);
+            }
+        });
+
+        new ResizeObserver(() => {
+            try { termFit.fit(); } catch(e) {}
+        }).observe(container);
+    }
+
+    function termTabComplete() {
+        const parts = termBuffer.split(' ');
+        const last = parts[parts.length - 1];
+        if (!last) return;
+
+        let matches = [];
+
+        // AI+ commands (start with /)
+        if (last.startsWith('/')) {
+            const query = last.slice(1).toLowerCase();
+            // Custom commands
+            for (const c of termCustomCommands) {
+                if (c.name.toLowerCase().startsWith(query)) matches.push('/' + c.name);
+            }
+            // Built-in commands
+            const builtins = ['help', 'mode', 'model', 'cache', 'reset'];
+            for (const b of builtins) {
+                if (b.startsWith(query) && !matches.includes('/' + b)) matches.push('/' + b);
+            }
+        }
+        // File/dir paths
+        else if (last.includes('/') || last.includes('~') || last === '.' || last === '..') {
+            // Delegate to shell for path completion
+            return;
+        }
+        // Binary completion — just show available commands
+        else if (parts.length === 1) {
+            const query = last.toLowerCase();
+            const common = ['ls', 'cd', 'cat', 'echo', 'pwd', 'clear', 'git', 'npm', 'node', 'python3',
+                'pip', 'docker', 'make', 'cp', 'mv', 'rm', 'mkdir', 'touch', 'head', 'tail', 'grep',
+                'find', 'chmod', 'chown', 'ps', 'top', 'kill', 'env', 'export', 'source'];
+            for (const c of common) {
+                if (c.startsWith(query)) matches.push(c);
+            }
+        }
+
+        if (matches.length === 1) {
+            const rest = matches[0].slice(last.length);
+            termBuffer += rest;
+            term.write(rest);
+        } else if (matches.length > 1) {
+            // Find common prefix
+            let prefix = matches[0];
+            for (let i = 1; i < matches.length; i++) {
+                while (matches[i].indexOf(prefix) !== 0) prefix = prefix.slice(0, -1);
+            }
+            if (prefix.length > last.length) {
+                const rest = prefix.slice(last.length);
+                termBuffer += rest;
+                term.write(rest);
+            } else {
+                term.write('\r\n');
+                term.writeln(matches.join('  '));
+                writePrompt();
+                term.write(termBuffer);
+            }
+        }
+    }
+
+    function writePrompt() {
+        const display = termCwd === '~' ? '~' : termCwd.replace(/^\/Users\/[^/]+/, '~');
+        const aiCmdMode = termBuffer.startsWith('/') ? '\x1b[33m' : '\x1b[36m';
+        term.write(`\r\n${aiCmdMode}${display}\x1b[0m $ `);
+    }
+
+    function updateTermCwd() {
+        const el = document.getElementById('termCwd');
+        if (el) el.textContent = termCwd;
+        localStorage.setItem('termCwd', termCwd);
+    }
+
+    async function termExec(cmd) {
+        // AI+ commands
+        if (cmd.startsWith('/')) {
+            return termExecAi(cmd);
+        }
+        // Special shell builtins
+        if (cmd === 'clear' || cmd === 'cls') {
+            term.reset();
+            writePrompt();
+            return;
+        }
+        // cd — always resolve via shell to get accurate path
+        if (cmd.startsWith('cd ')) {
+            return termExecShell(cmd + ' && pwd');
+        }
+
+        return termExecShell(cmd);
+    }
+
+    async function termExecShell(cmd) {
+        if (termAbort) termAbort.abort();
+        const controller = new AbortController();
+        termAbort = controller;
+
+        const resolvedCwd = termCwd.replace('~', homeDir());
+        try {
+            const resp = await fetch('/api/terminal/exec', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: cmd, cwd: resolvedCwd }),
+                signal: controller.signal,
+            });
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                const lines = buf.split('\n');
+                buf = lines.pop() || '';
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        if (line.startsWith('event: ') || line.startsWith(':')) continue;
+                        const dataMatch = line.match(/^data: (.+)/);
+                        if (dataMatch) {
+                            const d = JSON.parse(dataMatch[1]);
+                            if (d.text) {
+                                // Track cd via pwd output from shell
+                                if (cmd.startsWith('cd ') && d.text.startsWith('/') && !d.text.startsWith('cd:')) {
+                                    termCwd = d.text;
+                                    updateTermCwd();
+                                }
+                                term.writeln(d.text.replace(/\n/g, '\r\n'));
+                            }
+                        }
+                    } catch(e) { /* skip malformed */ }
+                }
+            }
+        } catch(e) {
+            if (e.name !== 'AbortError') {
+                term.writeln(`\x1b[31m${__('common.error')}: ${e.message}\x1b[0m`);
+            }
+        }
+        termAbort = null;
+        writePrompt();
+    }
+
+    async function termExecAi(cmd) {
+        const parts = cmd.slice(1).split(' ');
+        const name = parts[0];
+        const args = parts.slice(1).join(' ');
+
+        if (termAbort) termAbort.abort();
+        const controller = new AbortController();
+        termAbort = controller;
+
+        const resolvedCwd = termCwd.replace('~', homeDir());
+        try {
+            const resp = await fetch('/api/terminal/ai-cmd', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, args, cwd: resolvedCwd }),
+                signal: controller.signal,
+            });
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                const lines = buf.split('\n');
+                buf = lines.pop() || '';
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        if (line.startsWith('event: ') || line.startsWith(':')) continue;
+                        const dataMatch = line.match(/^data: (.+)/);
+                        if (dataMatch) {
+                            const d = JSON.parse(dataMatch[1]);
+                            if (d.text) {
+                                term.writeln(d.text.replace(/\n/g, '\r\n'));
+                            }
+                        }
+                    } catch(e) { /* skip malformed */ }
+                }
+            }
+        } catch(e) {
+            if (e.name !== 'AbortError') {
+                term.writeln(`\x1b[31m${__('common.error')}: ${e.message}\x1b[0m`);
+            }
+        }
+        termAbort = null;
+        writePrompt();
+    }
+
+    function termKill() {
+        if (termAbort) {
+            termAbort.abort();
+            termAbort = null;
+            term.writeln('\r\n\x1b[33m^C\x1b[0m');
+        }
+    }
+
+    function termReset() {
+        if (termAbort) termAbort.abort();
+        termAbort = null;
+        termBuffer = '';
+        termHistory = [];
+        termHistoryIdx = -1;
+        termCwd = '~';
+        updateTermCwd();
+        if (term) {
+            term.reset();
+            term.write('\x1b[32m' + __('commands.terminal.welcome').split(' — ')[0] + '\x1b[0m — ' + __('commands.terminal.reset_done') + '\r\n');
+            writePrompt();
+        }
+    }
+
+    function homeDir() {
+        const ua = navigator.userAgent;
+        return '/Users/g_dl';
+    }
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
+    loadCommands();
+    loadSystemCommands();
+    // Init terminal on load (no tab switching needed)
+    setTimeout(termInit, 300);
+</script>
+{% endblock %}

@@ -1,0 +1,3 @@
+[console_scripts]
+hy = hycoder.cli:main
+hybrid-coder = hycoder.cli:main

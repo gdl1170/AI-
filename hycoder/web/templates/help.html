@@ -1,0 +1,333 @@
+{% extends "layout.html" %}
+{% block title %}How it works{% endblock %}
+{% block heading %}📖 How AI+ works{% endblock %}
+{% block content %}
+<style>
+    .help-section { margin-bottom: 32px; }
+    .help-section h3 { font-size: 1.1rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .help-section p, .help-section li { font-size: 0.9rem; line-height: 1.7; color: var(--text-dim); }
+    .help-section ul { padding-left: 20px; margin: 8px 0; }
+    .help-section ul li { margin: 4px 0; }
+    .help-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin-bottom: 12px; }
+    .help-card h4 { font-size: 0.95rem; margin-bottom: 4px; }
+    .help-card p { font-size: 0.85rem; color: var(--text-dim); margin: 0; }
+    kbd { background: var(--bg); padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); font-size: 0.75rem; font-family: inherit; }
+    .shortcut-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .shortcut-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--bg); border-radius: 6px; font-size: 0.85rem; }
+    .shortcut-item kbd { min-width: 60px; text-align: center; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 16px 0; }
+    .feature-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; transition: border-color 0.15s; }
+    .feature-card:hover { border-color: var(--blue); }
+    .feature-card .fc-icon { font-size: 1.5rem; margin-bottom: 8px; }
+    .feature-card h4 { font-size: 0.95rem; margin-bottom: 4px; }
+    .feature-card p { font-size: 0.82rem; color: var(--text-dim); line-height: 1.5; margin: 0; }
+    .feature-card .fc-badge { display: inline-block; font-size: 0.65rem; padding: 2px 8px; border-radius: 10px; margin-top: 8px; background: rgba(88,166,255,0.12); color: var(--blue); border: 1px solid rgba(88,166,255,0.2); }
+    .flow-diagram { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 20px; background: var(--bg); border-radius: 10px; margin: 12px 0; justify-content: center; border: 1px solid var(--border); }
+    .flow-step { padding: 8px 16px; border-radius: 6px; font-size: 0.82rem; background: var(--surface); border: 1px solid var(--border); text-align: center; }
+    .flow-step.kb { border-color: #f0a; color: #f0a; border-width: 2px; }
+    .flow-step.local { border-color: var(--green); color: var(--green); }
+    .flow-step.online { border-color: var(--blue); color: var(--blue); }
+    .flow-step.router { border-color: var(--purple); color: var(--purple); }
+    .flow-step.persist { border-color: var(--orange); color: var(--orange); }
+    .flow-arrow { color: var(--text-dim); font-size: 1.2rem; }
+    .flow-branch { display: flex; align-items: center; gap: 6px; }
+    .arch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 12px 0; }
+    .arch-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .arch-item h4 { font-size: 0.9rem; margin: 0 0 4px; }
+    .arch-item p { font-size: 0.78rem; color: var(--text-dim); margin: 0; line-height: 1.5; }
+    .arch-item .arch-badge { font-size: 0.6rem; padding: 1px 6px; border-radius: 8px; display: inline-block; margin-top: 6px; }
+    .badge-green { background: rgba(0,200,83,0.12); color: var(--green); }
+    .badge-blue { background: rgba(88,166,255,0.12); color: var(--blue); }
+    .badge-orange { background: rgba(255,179,0,0.12); color: var(--orange); }
+    .badge-purple { background: rgba(187,134,252,0.12); color: var(--purple); }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+</style>
+
+<p style="font-size:0.85rem;color:var(--text-dim);margin:-8px 0 24px" data-i18n="help.author">Author : Julian DL Team AI+ - official platform documentation -</p>
+
+<!-- ─── 1. What is AI+ ─────────────────────────────────────── -->
+<div class="help-section">
+    <h3 data-i18n="help.what_is">🧠 Cos'è AI+?</h3>
+    <p data-i18n="help.what_is_desc">AI+ è un assistente AI ibrido che combina modelli locali (Ollama) e cloud (OpenAI, OpenRouter, Gemini, opencode) con routing intelligente, agenti con tool, knowledge base RAG, note in stile Obsidian, e un ambiente di sviluppo integrato nel browser.</p>
+</div>
+
+<!-- ─── 2. Architecture ─────────────────────────────────────── -->
+<div class="help-section">
+    <h3>🔄 Architettura ibrida: Routing + KB + Persistenza</h3>
+    <p>AI+ <strong>cresce con la tua Knowledge Base</strong>. Ogni documento, file o URL che importi arricchisce il bagaglio informativo del sistema. Quando fai una domanda in chat, il modello — sia locale che online — viene sempre potenziato con il contesto della Knowledge Base (RAG), per risposte più rapide, precise e pertinenti.</p>
+
+    <div class="flow-diagram">
+        <span class="flow-step" data-i18n="help.flow.prompt">📝 Prompt</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step router" style="border-color:#f0a;color:#f0a;border-width:2px" data-i18n="help.flow.kb_search">📚 Knowledge Base</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step router" data-i18n="help.flow.router">🧠 Router</span>
+        <span class="flow-arrow">→</span>
+        <div class="flow-branch">
+            <span class="flow-step local" data-i18n="help.flow.local">🖥 Locale + KB</span>
+            <span class="flow-arrow" data-i18n="help.flow.or">— oppure —</span>
+            <span class="flow-step online" data-i18n="help.flow.online">☁ Online + KB</span>
+        </div>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step" data-i18n="help.flow.response">💬 Risposta con fonti</span>
+    </div>
+
+    <p style="margin-top:8px" data-i18n="help.routing_detail">Il router valuta complessità del prompt, keyword tecniche e rilevanza KB per scegliere il modello migliore. In entrambi i casi, i chunk più rilevanti della Knowledge Base vengono iniettati automaticamente nel contesto. Puoi forzare la modalità con <kbd>🖥</kbd> <kbd>🔧</kbd> <kbd>⚡</kbd> nella chat. Il risultato finale include sempre le fonti consultate.</p>
+
+    <!-- Persistenza -->
+    <div class="flow-diagram" style="margin-top:16px;border-color:rgba(255,179,0,0.3)">
+        <span class="flow-step persist">📚 Knowledge Base</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step" style="border-color:var(--orange);color:var(--orange)">💾 Salvataggio automatico su disco</span>
+        <span class="flow-arrow">↻</span>
+        <span class="flow-step" style="border-color:var(--orange);color:var(--orange)">🔄 Caricamento all'avvio</span>
+    </div>
+</div>
+
+<hr class="divider">
+
+<!-- ─── 3. Knowledge Base (dettaglio) ────────────────────────── -->
+<div class="help-section">
+    <h3>📚 Knowledge Base — Il cuore del sistema</h3>
+    <p>La Knowledge Base è il cuore pulsante di AI+. Più dati importi — file, directory, URL, repository GitHub — più il sistema diventa preciso e veloce. Il motore RAG (TF-IDF + embedding) indicizza ogni contenuto in chunk, e il modello locale li usa come contesto per rispondere senza dover chiamare API esterne.</p>
+
+    <div class="arch-grid">
+        <div class="arch-item">
+            <h4>🧩 Chunking intelligente</h4>
+            <p>I file vengono suddivisi in chunk da ~600 caratteri con overlap di 150 caratteri. Supporto multi-formato: PDF, Markdown, Python, JS, HTML, CSS, JSON, YAML, Go, Rust, testo semplice.</p>
+            <span class="arch-badge badge-green">Automatico</span>
+        </div>
+        <div class="arch-item">
+            <h4>🔍 Ricerca ibrida TF-IDF + Embedding</h4>
+            <p>La ricerca combina TF-IDF (peso 0.3) per match lessicale e embedding vettoriale (peso 0.7) per similarità semantica. Se l'embedding non è disponibile, usa solo TF-IDF.</p>
+            <span class="arch-badge badge-blue">Ponderato</span>
+        </div>
+        <div class="arch-item">
+            <h4>💾 Persistenza automatica</h4>
+            <p>L'indice (TF-IDF + vettori) viene salvato su disco in <code>_index.json.gz</code> dopo ogni modifica. I dati sopravvivono a riavvii del server. All'avvio, l'indice viene caricato automaticamente.</p>
+            <span class="arch-badge badge-orange">Durevole</span>
+        </div>
+        <div class="arch-item">
+            <h4>⚡ RAG gating intelligente</h4>
+            <p>Il sistema non interroga la KB per query banali (saluti, ringraziamenti) usando una lista di pattern predefiniti. Per query con keyword tecniche, forza sempre la ricerca RAG.</p>
+            <span class="arch-badge badge-green">Ottimizzato</span>
+        </div>
+        <div class="arch-item">
+            <h4>📊 Grafo della conoscenza</h4>
+            <p>Visualizzazione interattiva dei chunk come grafo (forza, albero, radiale). I nodi sono raggruppati per tipo file, le connessioni rappresentano similarità semantica.</p>
+            <span class="arch-badge badge-purple">Visivo</span>
+        </div>
+        <div class="arch-item">
+            <h4>📝 Wiki pagine</h4>
+            <p>Per ogni chunk viene generata automaticamente una pagina wiki con metadati (fonte, tipo, dimensione). Il pulsante "Suggerisci" propone pagine correlate.</p>
+            <span class="arch-badge badge-blue">Auto-generato</span>
+        </div>
+        <div class="arch-item">
+            <h4>🗑 Reset e pulizia</h4>
+            <p>La KB può essere svuotata con un clic ("Svuota KB"). Le fonti possono essere rimosse singolarmente. Il reset cancella anche l'indice su disco.</p>
+            <span class="arch-badge badge-orange">Controllato</span>
+        </div>
+        <div class="arch-item">
+            <h4>🌐 Importazione multi-formato</h4>
+            <p>Importa file singoli (drag & drop), directory (browser file con pattern), URL (download e indicizzazione HTML). Supporto pattern glob: <code>*.py</code>, <code>*.md</code>, <code>*</code>.</p>
+            <span class="arch-badge badge-green">Universale</span>
+        </div>
+    </div>
+</div>
+
+<hr class="divider">
+
+<!-- ─── 4. Skills ───────────────────────────────────────────── -->
+<div class="help-section">
+    <h3>⚡ Skills — Adatta skill da altre piattaforme</h3>
+    <p>Le Skills ti permettono di importare assistenti specializzati da altre piattaforme (opencode, ChatGPT GPT, Claude Project, custom) e usarli in AI+. Il sistema rileva automaticamente la piattaforma di origine e adatta il formato.</p>
+
+    <div class="arch-grid">
+        <div class="arch-item">
+            <h4>📥 Import automatico</h4>
+            <p>Carica un file <code>.md</code>, <code>.json</code> o <code>.txt</code> e il sistema rileva la piattaforma dal nome file + struttura JSON (presenza di campi come <code>instructions</code>, <code>system_prompt</code>, <code>categories</code>).</p>
+            <span class="arch-badge badge-green">Drag & drop</span>
+        </div>
+        <div class="arch-item">
+            <h4>🔄 Adattamento automatico</h4>
+            <p>La skill viene convertita in formato unificato AI+ con campi: nome, descrizione, prompt, piattaforma di origine, modello preferito, temperatura.</p>
+            <span class="arch-badge badge-blue">Cross-platform</span>
+        </div>
+        <div class="arch-item">
+            <h4>📤 Esportazione</h4>
+            <p>Ogni skill può essere esportata in formato JSON per backup o condivisione. Il CLI <code>bin/adapt-skill</code> permette di importare/esportare da terminale.</p>
+            <span class="arch-badge badge-orange">Portabile</span>
+        </div>
+        <div class="arch-item">
+            <h4>📋 Gestione libreria</h4>
+            <p>Elenco completo delle skill importate con dettaglio modal, copia prompt, eliminazione. Le skill persistono su disco in <code>~/.config/hybrid-coder/skills/</code>.</p>
+            <span class="arch-badge badge-purple">Persistente</span>
+        </div>
+    </div>
+</div>
+
+<hr class="divider">
+
+<!-- ─── 5. Agents + Tools ───────────────────────────────────── -->
+<div class="help-section">
+    <h3 data-i18n="help.agents">🤖 Agenti e Tool</h3>
+    <p data-i18n="help.agents_desc">Gli agenti sono assistenti specializzati con istruzioni di sistema, modello preferito e permessi tool. Seleziona un agente dalla barra della chat per attivarlo.</p>
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="fc-icon">📖</div>
+            <h4>read</h4>
+            <p data-i18n="help.tool_read">Legge file e directory. Supporta offset/limit per file grandi.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">✏️</div>
+            <h4>write</h4>
+            <p data-i18n="help.tool_write">Crea o sovrascrive file. Crea automaticamente le directory necessarie.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">🔍</div>
+            <h4>edit</h4>
+            <p data-i18n="help.tool_edit">Modifica file trovando e sostituendo testo esatto (oldString → newString).</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">🗑</div>
+            <h4>delete</h4>
+            <p data-i18n="help.tool_delete">Elimina file o directory. Operazione reversibile solo se versionato.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">▶️</div>
+            <h4>run</h4>
+            <p data-i18n="help.tool_run">Esegue comandi shell in sandbox. Comandi consentiti: python, node, git, grep, curl, pip e altri.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">🔎</div>
+            <h4>search</h4>
+            <p data-i18n="help.tool_search">Cerca pattern regex nei file del workspace (grep).</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">🌐</div>
+            <h4>web</h4>
+            <p data-i18n="help.tool_web">Cerca informazioni online (DuckDuckGo) o scarica pagine web.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">🧠</div>
+            <h4>memory</h4>
+            <p data-i18n="help.tool_memory">Memoria a breve termine: salva, recupera, elenca e pulisce dati tra iterazioni.</p>
+        </div>
+    </div>
+    <p data-i18n="help.tool_call">Quando un agente con tool abilitati è attivo, la chat mostra ogni tool call con <span class="tool-call" style="display:inline;padding:2px 6px;font-size:0.75rem">🔧 read</span> e il risultato con <span class="tool-result" style="display:inline;padding:2px 6px;font-size:0.72rem">✅ output</span>.</p>
+</div>
+
+<hr class="divider">
+
+<!-- ─── 6. Pages ────────────────────────────────────────────── -->
+<div class="help-section">
+    <h3 data-i18n="help.pages">📄 Pagine della piattaforma</h3>
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="fc-icon">💬</div>
+            <h4 data-i18n="page.title.chat">Chat</h4>
+            <p data-i18n="help.page.chat">Interfaccia principale. Scrivi prompt, scegli agente e modalità, vedi risposte in streaming con metriche live.</p>
+            <span class="fc-badge" data-i18n="help.page.badge_home">Home</span>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">📊</div>
+            <h4 data-i18n="page.title.dashboard">Dashboard</h4>
+            <p data-i18n="help.page.dashboard">Statistiche di utilizzo: token in/out, chiamate per sorgente, tempo, costo stimato.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">📚</div>
+            <h4 data-i18n="page.title.knowledge">Knowledge</h4>
+            <p data-i18n="help.page.knowledge">Knowledge Base con RAG: query semantica, wiki pagine, documenti, grafo conoscenze. Più dati importi, più AI+ diventa intelligente — il contesto KB viene automaticamente iniettato in ogni conversazione, rendendo il modello locale più rapido e performante.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">📝</div>
+            <h4 data-i18n="page.title.notes">Note</h4>
+            <p data-i18n="help.page.notes">Note in stile Obsidian con wiki-link (<code>[[Pagina]]</code>), tag (<code>#tag</code>), grafo connessioni e editor integrato.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">🤖</div>
+            <h4 data-i18n="page.title.agents">Agents</h4>
+            <p data-i18n="help.page.agents">Crea, modifica e gestisci agenti personalizzati. Ogni agente ha istruzioni, modello, temperatura e permessi tool.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">⚡</div>
+            <h4 data-i18n="page.title.skills">Skills</h4>
+            <p data-i18n="help.page.skills">Carica skill da opencode, ChatGPT GPT, Claude Project e adattale automaticamente al formato AI+. Crea, importa, esporta e gestisci skill personalizzate.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">📦</div>
+            <h4 data-i18n="page.title.projects">Progetti</h4>
+            <p data-i18n="help.page.projects">Scaffolding progetti da template (python, flask, html). Esegui, testa e preview del codice.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">⚡</div>
+            <h4 data-i18n="page.title.commands">Comandi</h4>
+            <p data-i18n="help.page.commands">Terminale integrato (xterm.js) e comandi personalizzati salvati.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">📋</div>
+            <h4 data-i18n="page.title.prompts">Prompt</h4>
+            <p data-i18n="help.page.prompts">Libreria di prompt template con variabili <code>{{var}}</code> per riutilizzo rapido.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">📁</div>
+            <h4 data-i18n="page.title.workspace">Workspace</h4>
+            <p data-i18n="help.page.workspace">Esplora file, modifica codice, git status/diff/commit — come un IDE leggero nel browser.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">⚙</div>
+            <h4 data-i18n="page.title.settings">Impostazioni</h4>
+            <p data-i18n="help.page.settings">Configurazione completa: modelli locali/online, routing, tracking, backup, provider API keys.</p>
+        </div>
+        <div class="feature-card">
+            <div class="fc-icon">🎙</div>
+            <h4>J.A.R.V.I.S.</h4>
+            <p data-i18n="help.page.jarvis">Assistente vocale con riconoscimento vocale, sintesi vocale, attivazione con wake word "Jarvis".</p>
+            <span class="fc-badge" data-i18n="help.page.badge_beta">Beta</span>
+        </div>
+    </div>
+</div>
+
+<div class="help-section">
+    <h3 data-i18n="help.shortcuts.title">⌨️ Scorciatoie da tastiera</h3>
+    <div class="shortcut-grid">
+        <div class="shortcut-item"><kbd>⌘K</kbd> <span data-i18n="help.shortcuts.palette">Command palette</span></div>
+        <div class="shortcut-item"><kbd>⌘⇧O</kbd> <span data-i18n="help.shortcuts.ocframe">Opencode frame</span></div>
+        <div class="shortcut-item"><kbd>⌘⇧C</kbd> <span data-i18n="help.shortcuts.clear">Clear chat</span></div>
+        <div class="shortcut-item"><kbd>⌘⇧N</kbd> <span data-i18n="help.shortcuts.new_session">Nuova sessione</span></div>
+        <div class="shortcut-item"><kbd>⌘⇧A</kbd> <span data-i18n="help.shortcuts.select_agent">Seleziona agente</span></div>
+        <div class="shortcut-item"><kbd>Esc</kbd> <span data-i18n="help.shortcuts.close_modal">Chiudi modali</span></div>
+        <div class="shortcut-item"><kbd>↑</kbd> <span data-i18n="help.shortcuts.last_prompt">Ultimo prompt</span></div>
+        <div class="shortcut-item"><kbd>Ctrl+C</kbd> <span data-i18n="help.shortcuts.stop">Stop generazione</span></div>
+    </div>
+</div>
+
+<div class="help-section">
+    <h3 data-i18n="help.theme">🌙 Tema chiaro/scuro</h3>
+    <p data-i18n="help.theme_desc">Clicca il pulsante <strong>🌙</strong> / <strong>☀️</strong> nella barra laterale in basso, accanto allo stato dei modelli. La preferenza viene salvata automaticamente.</p>
+</div>
+
+<div class="help-section">
+    <h3 data-i18n="help.cli">🔧 Da CLI</h3>
+    <p data-i18n="help.cli_desc">AI+ funziona anche da terminale:</p>
+    <ul>
+        <li data-i18n="help.cli.chat"><code>hy chat</code> — chat interattiva</li>
+        <li data-i18n="help.cli.serve"><code>hy web</code> — avvia il server web</li>
+        <li data-i18n="help.cli.generate"><code>hy generate "prompt"</code> — output JSON</li>
+        <li data-i18n="help.cli.learn"><code>hy learn from-dir &lt;path&gt;</code> — indicizza documenti</li>
+        <li data-i18n="help.cli.notes"><code>hy notes list</code> — gestione note</li>
+        <li data-i18n="help.cli.project"><code>hy project create &lt;nome&gt;</code> — scaffold progetto</li>
+    </ul>
+</div>
+
+<script>
+    // Open external links in new tab
+    document.querySelectorAll('.help-section a[href^="http"]').forEach(a => a.target = '_blank');
+    // Cross-platform keyboard hints
+    if (!navigator.platform.toUpperCase().includes('MAC')) {
+        document.querySelectorAll('.shortcut-grid kbd').forEach(el => {
+            el.textContent = el.textContent.replace(/⌘/g, 'Ctrl+').replace(/⇧/g, 'Shift+');
+        });
+    }
+</script>
+{% endblock %}

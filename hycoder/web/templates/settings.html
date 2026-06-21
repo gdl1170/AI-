@@ -1,0 +1,1547 @@
+{% extends "layout.html" %}
+{% block title %}Settings{% endblock %}
+{% block heading %}🔧 Settings{% endblock %}
+{% block content %}
+<style>
+    .settings-wrap { max-width: 800px; }
+    .section { margin-bottom: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+    .section-header { padding: 14px 20px; cursor: pointer; display: flex; align-items: center; gap: 10px; user-select: none; border-bottom: 1px solid var(--border); }
+    .section-header:hover { background: rgba(255,255,255,0.02); }
+    .section-header h3 { margin: 0; font-size: 0.95rem; flex: 1; }
+    .section-header .arrow { transition: transform 0.2s; font-size: 0.8rem; }
+    .section-header.collapsed .arrow { transform: rotate(-90deg); }
+    .section-body { padding: 4px 20px 16px; }
+    .section-header.collapsed + .section-body { display: none; }
+    .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 16px; }
+    .setting-row:last-child { border: none; }
+    .setting-label { font-size: 0.85rem; min-width: 140px; }
+    .setting-desc { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+    .setting-input { max-width: 280px; flex-shrink: 0; }
+    .setting-input input, .setting-input select { font-size: 0.85rem; }
+    .setting-input input[type="number"] { width: 100px; }
+    .setting-input input[type="checkbox"] { width: auto; accent-color: var(--green); }
+    .save-bar { position: sticky; bottom: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 20px; margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .info-item { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; }
+    .info-item .lbl { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+    .info-item .val { font-size: 0.95rem; font-weight: 500; margin-top: 2px; }
+    .info-item .val small { font-weight: 400; font-size: 0.75rem; color: var(--text-dim); }
+    .test-btn { font-size: 0.75rem; padding: 4px 10px; cursor: pointer; }
+    .test-result { font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; margin-top: 4px; display: none; }
+    .test-result.ok { display: block; background: rgba(63,185,80,0.1); color: var(--green); }
+    .test-result.err { display: block; background: rgba(248,81,73,0.1); color: var(--red); }
+    .api-key-wrap { display: flex; gap: 4px; align-items: center; }
+    .api-key-wrap input { flex: 1; font-family: monospace; font-size: 0.8rem; }
+    .api-key-wrap .toggle-key { cursor: pointer; font-size: 0.8rem; padding: 4px 8px; background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text-dim); }
+    .api-key-wrap .toggle-key:hover { color: var(--text); }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tag-list .kw-tag { font-size: 0.65rem; padding: 2px 8px; border-radius: 10px; background: rgba(88,166,255,0.1); color: #58a6ff; border: 1px solid rgba(88,166,255,0.15); display: inline-flex; align-items: center; gap: 4px; }
+    .tag-list .kw-tag .kw-del { cursor: pointer; opacity: 0.5; font-size: 0.7rem; }
+    .tag-list .kw-tag .kw-del:hover { opacity: 1; }
+    .kw-input-row { display: flex; gap: 4px; margin-top: 6px; }
+    .kw-input-row input { flex: 1; font-size: 0.8rem; padding: 4px 8px; }
+    .kw-input-row button { font-size: 0.7rem; padding: 4px 10px; }
+    .unsaved { border: 2px solid var(--yellow) !important; }
+    .diag-ok { color: var(--green); }
+    .diag-warn { color: var(--yellow); }
+    .diag-error { color: var(--red); }
+    .diag-info { color: var(--blue); }
+    .diag-table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+    .diag-table td { padding:4px 8px; border-bottom:1px solid var(--border); }
+    .diag-table td:first-child { font-weight:500; width:140px; }
+    .bk-card { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px 12px; margin-bottom:6px; display:flex; align-items:center; gap:10px; font-size:0.78rem; }
+    .bk-card .bk-info { flex:1; }
+    .bk-card .bk-actions { display:flex; gap:4px; flex-shrink:0; }
+    .bk-card .bk-id { font-family:monospace; font-size:0.7rem; color:var(--text-dim); }
+    .bk-card .bk-version { font-size:0.7rem; color:var(--blue); }
+    .bk-card .bk-label { font-weight:500; }
+    @media (max-width: 700px) { .setting-row { flex-direction: column; align-items: flex-start; } .setting-input { max-width: 100%; width: 100%; } }
+    .folder-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+    .folder-picker-overlay.open { opacity: 1; pointer-events: all; }
+    .folder-picker { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 90%; max-width: 520px; max-height: 70vh; display: flex; flex-direction: column; }
+    .folder-picker h3 { font-size: 0.95rem; margin-bottom: 8px; }
+    .folder-picker .fp-path { font-size: 0.75rem; color: var(--text-dim); padding: 6px 10px; background: var(--bg); border-radius: 4px; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .folder-picker .fp-list { flex: 1; overflow-y: auto; min-height: 200px; max-height: 40vh; }
+    .folder-picker .fp-entry { padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; }
+    .folder-picker .fp-entry:hover { background: rgba(255,255,255,0.05); }
+    .folder-picker .fp-entry.selected { background: rgba(88,166,255,0.15); color: var(--blue); }
+    .folder-picker .fp-entry .fp-icon { flex-shrink: 0; }
+    .folder-picker .fp-entry .fp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .folder-picker .fp-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+</style>
+
+<div class="settings-wrap">
+
+<!--  Section 1: Modelli Locali  -->
+<div class="section" id="sec-local">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span class="arrow">▼</span>
+    <h3>🖥 Modello Locale (Ollama)</h3>
+  </div>
+  <div class="section-body">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Ollama URL</div>
+        <div class="setting-desc">Indirizzo del server Ollama</div>
+      </div>
+      <div class="setting-input" style="display:flex;gap:4px;max-width:360px">
+        <input id="localOllamaUrl" style="flex:1" placeholder="http://localhost:11434">
+        <button class="test-btn btn btn-sm" onclick="testOllama()">🔄 Test</button>
+      </div>
+    </div>
+    <div id="ollamaTestResult" class="test-result"></div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Modello</div>
+        <div class="setting-desc">Modello Ollama predefinito</div>
+      </div>
+      <div class="setting-input">
+        <select id="localModel"><option value="">Caricamento...</option></select>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Temperature</div>
+        <div class="setting-desc">Creatività del modello (0-2)</div>
+      </div>
+      <div class="setting-input">
+        <input id="localTemp" type="number" step="0.1" min="0" max="2">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Max tokens</div>
+        <div class="setting-desc">Lunghezza massima risposta</div>
+      </div>
+      <div class="setting-input">
+        <input id="localMaxTokens" type="number" step="64" min="64" max="32768">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Context length</div>
+        <div class="setting-desc">Dimensione contesto (tokens)</div>
+      </div>
+      <div class="setting-input">
+        <input id="localCtxLen" type="number" step="512" min="1024" max="131072">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Keep alive</div>
+        <div class="setting-desc">Tempo mantenimento modello in memoria</div>
+      </div>
+      <div class="setting-input">
+        <select id="keepAlive">
+          <option value="1m">1 minuto</option>
+          <option value="5m">5 minuti</option>
+          <option value="10m">10 minuti</option>
+          <option value="30m">30 minuti</option>
+          <option value="1h">1 ora</option>
+          <option value="2h">2 ore</option>
+          <option value="-1m">Sempre caricato</option>
+        </select>
+      </div>
+    </div>
+    <div class="setting-row" style="flex-direction:column;gap:8px">
+      <div style="display:flex;gap:4px;width:100%">
+        <input id="pullModelInput" placeholder="Scarica nuovo modello (es. llama3.2:3b)..." style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:0.8rem;outline:none">
+        <button class="btn btn-sm btn-primary" onclick="pullModelFromSettings()">⬇ Scarica</button>
+      </div>
+      <div id="pullLog" style="display:none;padding:8px 12px;background:#0d1117;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:'SF Mono',monospace;font-size:0.72rem;max-height:100px;overflow-y:auto;white-space:pre-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<!--  Section 2: Modelli Online  -->
+<div class="section" id="sec-online">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span class="arrow">▼</span>
+    <h3>☁ Online Model</h3>
+  </div>
+  <div class="section-body">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Provider</div>
+        <div class="setting-desc">Cloud LLM platform</div>
+      </div>
+      <div class="setting-input">
+        <select id="onlineProvider" onchange="toggleOnlineProvider()">
+          <option value="opencode">🔧 Opencode (tools + web)</option>
+          <option value="openrouter">☁ OpenRouter (LLM)</option>
+          <option value="openai">🤖 OpenAI (LLM)</option>
+        </select>
+      </div>
+    </div>
+    <div class="setting-row" id="authMethodRow">
+      <div>
+        <div class="setting-label">Auth method</div>
+        <div class="setting-desc">Authentication type</div>
+      </div>
+      <div class="setting-input">
+        <select id="authMethod" onchange="toggleAuthMethod()">
+          <option value="api_key">🔑 API Key</option>
+          <option value="login">👤 Login + Password</option>
+        </select>
+      </div>
+    </div>
+    <div class="setting-row" id="apiKeyRow">
+      <div>
+        <div class="setting-label">API Key</div>
+        <div class="setting-desc">API key for online provider</div>
+      </div>
+      <div class="setting-input api-key-wrap" style="max-width:360px">
+        <input id="apiKey" type="password" placeholder="sk-..." style="flex:1">
+        <button class="toggle-key" onclick="toggleKeyVis()" id="keyToggle" title="Show/Hide">👁</button>
+        <button class="test-btn btn btn-sm" onclick="testOnline()">🔄 Test</button>
+      </div>
+    </div>
+    <div class="setting-row" id="loginRow" style="display:none">
+      <div>
+        <div class="setting-label">Email / Username</div>
+        <div class="setting-desc">Login for online provider</div>
+      </div>
+      <div class="setting-input" style="max-width:360px">
+        <input id="onlineUsername" type="text" placeholder="email@example.com" style="flex:1">
+      </div>
+    </div>
+    <div class="setting-row" id="passwordRow" style="display:none">
+      <div>
+        <div class="setting-label">Password</div>
+        <div class="setting-desc">Account password</div>
+      </div>
+      <div class="setting-input api-key-wrap" style="max-width:360px">
+        <input id="onlinePassword" type="password" placeholder="••••••••" style="flex:1">
+        <button class="toggle-key" onclick="togglePwdVis()" id="pwdToggle" title="Show/Hide">👁</button>
+      </div>
+    </div>
+    <div id="onlineTestResult" class="test-result"></div>
+    <div class="setting-row" id="onlineModelRow">
+      <div>
+        <div class="setting-label">Modello</div>
+        <div class="setting-desc">Modello cloud predefinito</div>
+      </div>
+      <div class="setting-input">
+        <select id="onlineModel"><option value="">Caricamento...</option></select>
+      </div>
+    </div>
+    <div class="setting-row" id="opencodePathRow">
+      <div>
+        <div class="setting-label">Opencode path</div>
+        <div class="setting-desc">Percorso binario opencode</div>
+      </div>
+      <div class="setting-input" style="max-width:360px">
+        <input id="opencodePath" placeholder="~/.opencode/bin/opencode">
+      </div>
+    </div>
+    <div class="setting-row" id="onlineBaseUrlRow">
+      <div>
+        <div class="setting-label">Base URL</div>
+        <div class="setting-desc">URL API personalizzato (opzionale)</div>
+      </div>
+      <div class="setting-input">
+        <input id="onlineBaseUrl" placeholder="https://openrouter.ai/api/v1">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Temperature</div>
+        <div class="setting-desc">Creatività del modello online</div>
+      </div>
+      <div class="setting-input">
+        <input id="onlineTemp" type="number" step="0.1" min="0" max="2">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Max tokens</div>
+        <div class="setting-desc">Lunghezza massima risposta online</div>
+      </div>
+      <div class="setting-input">
+        <input id="onlineMaxTokens" type="number" step="64" min="64" max="65536">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--  Section 3: Router  -->
+<div class="section" id="sec-router">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span class="arrow">▼</span>
+    <h3>🔄 Router</h3>
+  </div>
+  <div class="section-body">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Modalità</div>
+        <div class="setting-desc">Come decide se usare locale o online</div>
+      </div>
+      <div class="setting-input">
+        <select id="routerMode">
+          <option value="auto">Auto (intelligente)</option>
+          <option value="local">Solo locale</option>
+          <option value="online">Solo online</option>
+        </select>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Soglia complessità</div>
+        <div class="setting-desc">Più alto = più richieste vanno in locale (0-20)</div>
+      </div>
+      <div class="setting-input">
+        <input id="routerThreshold" type="number" min="0" max="20" step="1">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--  Section 4: Tracking & Costi  -->
+<div class="section" id="sec-tracking">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span class="arrow">▼</span>
+    <h3>📊 Tracking & Costi</h3>
+  </div>
+  <div class="section-body">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Salva cronologia</div>
+        <div class="setting-desc">Registra tutte le richieste su disco</div>
+      </div>
+      <div class="setting-input">
+        <input id="saveHistory" type="checkbox">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Mostra costi</div>
+        <div class="setting-desc">Stima costo richieste online</div>
+      </div>
+      <div class="setting-input">
+        <input id="showCost" type="checkbox">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Costo locale (per 1k token)</div>
+        <div class="setting-desc">Generalmente 0 (gratuito)</div>
+      </div>
+      <div class="setting-input">
+        <input id="localCost" type="number" step="0.001" min="0" style="width:100px"> $/1k
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Costo online input (per 1k)</div>
+        <div class="setting-desc">Costo per token in input</div>
+      </div>
+      <div class="setting-input">
+        <input id="onlineCostIn" type="number" step="0.001" min="0" style="width:100px"> $/1k
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Costo online output (per 1k)</div>
+        <div class="setting-desc">Costo per token generati</div>
+      </div>
+      <div class="setting-input">
+        <input id="onlineCostOut" type="number" step="0.001" min="0" style="width:100px"> $/1k
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--  Section 5: Workspace  -->
+<div class="section" id="sec-workspace">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span class="arrow">▼</span>
+    <h3>📁 Workspace</h3>
+  </div>
+  <div class="section-body">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Cartella di lavoro predefinita</div>
+        <div class="setting-desc">Directory principale del workspace all'avvio</div>
+      </div>
+      <div class="setting-input" style="display:flex;gap:4px;flex:1">
+        <input id="workspaceDefaultPath" type="text" placeholder="es. /Users/nome/progetti" style="flex:1">
+        <button class="btn btn-sm" onclick="pickWorkspaceDir()" title="Sfoglia">📂</button>
+      </div>
+    </div>
+    <div class="text-dim text-sm mt-2" id="workspaceStatus" style="padding-left:200px"></div>
+  </div>
+</div>
+
+<!--  Section 6: Sistema  -->
+<div class="section" id="sec-system">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span class="arrow">▼</span>
+    <h3>📊 Stato Sistema</h3>
+    <span class="text-dim text-sm" style="font-weight:400" id="sysUpdated"></span>
+  </div>
+  <div class="section-body">
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="lbl">Ollama</div>
+        <div class="val" id="sysOllama">Verifica...</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Online</div>
+        <div class="val" id="sysOnline">Verifica...</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Modello locale</div>
+        <div class="val" id="sysLocalModel">-</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Modello online</div>
+        <div class="val" id="sysOnlineModel">-</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Provider online</div>
+        <div class="val" id="sysProvider">-</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Cache risposte</div>
+        <div class="val" id="sysCache">-</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Chiamate totali</div>
+        <div class="val" id="sysCalls">-</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Token totali</div>
+        <div class="val" id="sysTokens">-</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Tempo totale</div>
+        <div class="val" id="sysTime">-</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Cronologia</div>
+        <div class="val" id="sysHistory">-</div>
+      </div>
+      <div class="info-item">
+        <div class="lbl">Cache</div>
+        <div class="val" id="sysCache">-</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm" onclick="refreshSysInfo()">🔄 Aggiorna</button>
+      <button class="btn btn-sm btn-danger" onclick="clearAllHistory()">🗑 Svuota cronologia</button>
+      <button class="btn btn-sm btn-danger" onclick="clearCache()">🗑 Cancella cache</button>
+      <button class="btn btn-sm" onclick="optimizeMemory()">🧹 Ottimizza memoria</button>
+    </div>
+    <div style="margin-top:8px;display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:8px">
+      <span class="text-dim text-xs"><strong>Build:</strong> <span id="sysBuildNumber">-</span></span>
+      <span class="text-dim text-xs" id="sysProfileName"><strong>Profilo:</strong> <span id="sysProfileNameValue">-</span></span>
+    </div>
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+      <h4 style="margin:0 0 8px;font-size:0.9rem">🛠 Manutenzione</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-sm btn-primary" onclick="runDiagnosis()">🔍 Esegui autodiagnosi</button>
+        <button class="btn btn-sm" onclick="checkDeps()" id="depsBtn">📦 Verifica librerie</button>
+      </div>
+      <div id="diagResults" class="text-sm" style="margin-bottom:12px"></div>
+      <div id="depsResult" class="text-sm" style="margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;border-top:1px solid var(--border);padding-top:12px">
+        <button class="btn btn-sm btn-primary" onclick="aiSelfImprove()" id="aiImproveBtn">🧠 Auto-miglioramento AI</button>
+        <button class="btn btn-sm" onclick="pipUpgrade()" id="updateBtn">📥 Aggiornamento pip</button>
+      </div>
+      <div id="aiResult" class="text-sm" style="margin-bottom:12px"></div>
+      <div id="updateResult" class="text-sm" style="margin-bottom:12px"></div>
+    </div>
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+      <h4 style="margin:0 0 8px;font-size:0.9rem">💾 Backup versionati</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="btn btn-sm btn-primary" onclick="createVersionedBackup()">📦 Crea snapshot</button>
+      </div>
+      <div id="backupList" class="text-sm" style="max-height:300px;overflow-y:auto"></div>
+      <div id="backupStatus" class="text-dim text-sm mt-2"></div>
+    </div>
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+      <h4 style="margin:0 0 8px;font-size:0.9rem">⏰ Backup automatici</h4>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Abilita backup automatici</div>
+          <div class="setting-desc">Esecuzione schedulata degli snapshot</div>
+        </div>
+        <div class="setting-input">
+          <input id="backupAutoEnabled" type="checkbox" onchange="toggleAutoBackup()">
+        </div>
+      </div>
+      <div class="setting-row" id="backupIntervalRow">
+        <div>
+          <div class="setting-label">Intervallo</div>
+          <div class="setting-desc">Ogni quanto creare uno snapshot</div>
+        </div>
+        <div class="setting-input">
+          <select id="backupInterval">
+            <option value="1">Ogni ora</option>
+            <option value="6">Ogni 6 ore</option>
+            <option value="12">Ogni 12 ore</option>
+            <option value="24" selected>Ogni 24 ore</option>
+            <option value="48">Ogni 48 ore</option>
+            <option value="72">Ogni 72 ore</option>
+            <option value="168">Ogni settimana</option>
+          </select>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Destinazione</div>
+          <div class="setting-desc">Cartella dove salvare i backup</div>
+        </div>
+        <div class="setting-input" style="display:flex;gap:4px;flex:1">
+          <input id="backupDestPath" type="text" style="flex:1;font-size:0.8rem">
+          <button class="btn btn-sm" onclick="pickBackupDestDir()" title="Sfoglia">📂</button>
+        </div>
+      </div>
+      <div class="text-dim text-sm" id="backupScheduleStatus"></div>
+    </div>
+  </div>
+</div>
+
+<!--  Section 7: Export Install Pack  -->
+<div class="section" id="sec-export">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span class="arrow">▼</span>
+    <h3>📦 Export Install Pack</h3>
+  </div>
+    <div class="section-body">
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Contenuto</div>
+            <div class="setting-desc">setupAI+ · setupAI+.bat · setup.py · requirements.txt · hycoder/ · bin/</div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Cartella di destinazione</div>
+            <div class="setting-desc">Dove salvare il pacchetto sul server</div>
+          </div>
+          <div class="setting-input" style="display:flex;gap:6px;max-width:320px">
+            <input type="text" id="exportDestPath" class="input" placeholder="~/Desktop" style="flex:1">
+            <button class="btn btn-sm" onclick="pickExportDir()" title="Sfoglia">📂</button>
+          </div>
+        </div>
+        <div class="text-xs text-dim" style="margin-bottom:8px">Build esportazioni: <strong id="exportBuildCount">0</strong></div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="exportInstallPack()">📦 Esporta Install Pack</button>
+          <button class="btn btn-sm" onclick="exportInstallPackDownload()">⬇ Solo download</button>
+        </div>
+        <div id="exportResult" class="text-sm" style="margin-top:8px"></div>
+      </div>
+</div>
+
+<!--  Section 7.5: GitHub Export  -->
+<div class="section" id="sec-github">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span class="arrow">▼</span>
+    <h3>🐙 Export su GitHub</h3>
+  </div>
+  <div class="section-body">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Repository URL</div>
+        <div class="setting-desc">URL del repository GitHub (es. git@github.com:user/repo.git o https://...)</div>
+      </div>
+      <div class="setting-input" style="max-width:360px;flex:1">
+        <input id="githubRepoUrl" type="text" placeholder="git@github.com:user/repo.git" style="width:100%">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Branch</div>
+        <div class="setting-desc">Branch di destinazione</div>
+      </div>
+      <div class="setting-input">
+        <input id="githubBranch" type="text" value="main" style="width:100px">
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">GitHub Token</div>
+        <div class="setting-desc">Personal access token (opzionale, per repo privati)</div>
+      </div>
+      <div class="setting-input api-key-wrap" style="max-width:360px;flex:1">
+        <input id="githubToken" type="password" placeholder="ghp_..." style="flex:1">
+        <button class="toggle-key" onclick="const i=document.getElementById('githubToken');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁':'🙈'" title="Show/Hide">👁</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Cartella da esportare</div>
+        <div class="setting-desc">Directory del progetto da pushare su GitHub</div>
+      </div>
+      <div class="setting-input" style="display:flex;gap:4px;flex:1;max-width:360px">
+        <input id="githubExportPath" type="text" style="flex:1;font-size:0.8rem" placeholder="/Users/g_dl/hybrid-coder">
+        <button class="btn btn-sm" onclick="pickGithubExportDir()" title="Sfoglia">📂</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Messaggio commit</div>
+        <div class="setting-desc">Testo del commit (lasciare vuoto per auto)</div>
+      </div>
+      <div class="setting-input" style="max-width:360px;flex:1">
+        <input id="githubCommitMsg" type="text" placeholder="auto: aggiornamento AI+" style="width:100%">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="exportToGithub()" id="githubExportBtn">🐙 Esporta su GitHub</button>
+      <button class="btn btn-sm" onclick="githubCheckStatus()" id="githubStatusBtn">🔍 Verifica git</button>
+    </div>
+    <div id="githubResult" class="text-sm" style="margin-top:8px;white-space:pre-wrap;font-family:monospace;font-size:0.75rem;max-height:200px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;display:none"></div>
+  </div>
+</div>
+
+<!--  Section 8: General (Language + Restart)  -->
+<div class="section" id="sec-general">
+  <div class="section-header" onclick="toggleSection(this)">
+    <span>⚙️ General</span>
+    <span class="arrow">▶</span>
+  </div>
+  <div class="section-body">
+    <!-- Language -->
+    <div class="setting-row">
+      <div>
+        <div class="setting-label" data-i18n="settings.language">Language</div>
+        <div class="setting-desc" data-i18n="settings.language.desc">Interface language (requires page reload)</div>
+      </div>
+      <div class="setting-input" style="max-width:200px">
+        <select id="langSelector" onchange="changeLang(this.value)">
+          <option value="en">🇬🇧 English</option>
+          <option value="it">🇮🇹 Italiano</option>
+        </select>
+      </div>
+    </div>
+    <!-- Restart -->
+    <div class="setting-row">
+      <div>
+        <div class="setting-label" data-i18n="settings.restart">🔄 Restart service</div>
+        <div class="setting-desc" data-i18n="settings.restart.desc">Restart the AI+ web server</div>
+      </div>
+      <div class="setting-input">
+        <button class="btn btn-danger" onclick="restartService()" data-i18n="settings.restart.btn">Restart</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--  Save Bar  -->
+<div class="save-bar">
+  <span id="saveStatus" class="text-dim text-sm"></span>
+  <button class="btn btn-sm btn-danger" onclick="resetConfig()" title="Ripristina impostazioni predefinite">↺ Reset</button>
+  <button class="btn btn-primary" onclick="saveSettings()">💾 Salva impostazioni</button>
+</div>
+
+</div>
+
+<script>
+  let configCache = {};
+
+  function toggleSection(header) {
+    header.classList.toggle('collapsed');
+  }
+
+  function toggleOnlineProvider() {
+    const prov = document.getElementById('onlineProvider').value;
+    const isOpro = prov === 'opencode';
+    document.getElementById('authMethodRow').style.display = isOpro ? 'none' : '';
+    document.getElementById('apiKeyRow').style.display = 'none';
+    document.getElementById('loginRow').style.display = 'none';
+    document.getElementById('passwordRow').style.display = 'none';
+    document.getElementById('opencodePathRow').style.display = isOpro ? '' : 'none';
+    document.getElementById('onlineBaseUrlRow').style.display = isOpro ? 'none' : '';
+    if (!isOpro) {
+      toggleAuthMethod();
+    }
+  }
+
+  function toggleAuthMethod() {
+    const method = document.getElementById('authMethod').value;
+    document.getElementById('apiKeyRow').style.display = method === 'api_key' ? '' : 'none';
+    document.getElementById('loginRow').style.display = method === 'login' ? '' : 'none';
+    document.getElementById('passwordRow').style.display = method === 'login' ? '' : 'none';
+  }
+
+  function toggleKeyVis() {
+    const inp = document.getElementById('apiKey');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    document.getElementById('keyToggle').textContent = inp.type === 'password' ? '👁' : '🙈';
+  }
+
+  function togglePwdVis() {
+    const inp = document.getElementById('onlinePassword');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    document.getElementById('pwdToggle').textContent = inp.type === 'password' ? '👁' : '🙈';
+  }
+
+  async function loadModels() {
+    try {
+      const m = await api('/api/models/list');
+      const cfg = await api('/api/config');
+      configCache = cfg;
+
+      const localSel = document.getElementById('localModel');
+      localSel.innerHTML = m.local.map(mod =>
+        `<option value="${mod.id}" ${mod.id === cfg.local_model ? 'selected' : ''}>${mod.name}</option>`
+      ).join('');
+      if (!localSel.value && m.local.length) localSel.value = m.local[0].id;
+
+      const onlineSel = document.getElementById('onlineModel');
+      onlineSel.innerHTML = m.online.map(mod =>
+        `<option value="${mod.id}" ${mod.id === cfg.online_model ? 'selected' : ''}>${mod.name}</option>`
+      ).join('');
+      if (!onlineSel.value && m.online.length) onlineSel.value = m.online[0].id;
+    } catch(e) { toast('Errore modelli: ' + e.message, 'error'); }
+  }
+
+  async function loadSettings() {
+    try {
+      const c = await api('/api/config');
+      configCache = c;
+
+      document.getElementById('localOllamaUrl').value = c.local_ollama_url || 'http://localhost:11434';
+      document.getElementById('localTemp').value = c.local_temperature ?? 0.7;
+      document.getElementById('localMaxTokens').value = c.local_max_tokens ?? 2048;
+      document.getElementById('localCtxLen').value = c.local_context_length ?? 8192;
+      document.getElementById('keepAlive').value = c.keep_alive || '5m';
+
+      document.getElementById('onlineProvider').value = c.online_provider || 'opencode';
+      document.getElementById('authMethod').value = c.online_auth_method || 'api_key';
+      document.getElementById('apiKey').value = c.online_api_key ? '••••••••' : '';
+      document.getElementById('onlineUsername').value = c.online_username || '';
+      document.getElementById('onlinePassword').value = c.online_password ? '••••••••' : '';
+      document.getElementById('opencodePath').value = c.opencode_path || '';
+      document.getElementById('langSelector').value = c.language || 'en';
+      if (window.i18n) window.i18n.setLang(c.language || 'en');
+      document.getElementById('onlineBaseUrl').value = c.online_base_url || '';
+      document.getElementById('onlineTemp').value = c.online_temperature ?? 0.7;
+      document.getElementById('onlineMaxTokens').value = c.online_max_tokens ?? 4096;
+
+      document.getElementById('routerMode').value = c.router_mode || 'auto';
+      document.getElementById('routerThreshold').value = c.router_threshold ?? 4;
+
+      document.getElementById('saveHistory').checked = c.save_history !== false;
+      document.getElementById('showCost').checked = c.show_cost !== false;
+      document.getElementById('localCost').value = c.local_cost_per_1k ?? 0;
+      document.getElementById('onlineCostIn').value = c.online_cost_per_1k_input ?? 0.01;
+      document.getElementById('onlineCostOut').value = c.online_cost_per_1k_output ?? 0.03;
+
+      document.getElementById('workspaceDefaultPath').value = c.workspace_default_path || '.';
+
+      document.getElementById('backupAutoEnabled').checked = c.backup_enabled === true;
+      document.getElementById('backupInterval').value = String(c.backup_interval_hours || 24);
+      document.getElementById('backupDestPath').value = c.backup_destination || '';
+      toggleAutoBackup();
+
+      toggleOnlineProvider();
+    } catch(e) { toast('Errore config: ' + e.message, 'error'); }
+  }
+
+  async function saveSettings() {
+    const btn = document.querySelector('.save-bar .btn-primary');
+    btn.disabled = true;
+    btn.textContent = '⏳ Salvataggio...';
+    document.getElementById('saveStatus').textContent = '';
+
+    try {
+      const body = {
+        local_ollama_url: document.getElementById('localOllamaUrl').value.trim(),
+        local_model: document.getElementById('localModel').value,
+        local_temperature: parseFloat(document.getElementById('localTemp').value) || 0.7,
+        local_max_tokens: parseInt(document.getElementById('localMaxTokens').value) || 2048,
+        local_context_length: parseInt(document.getElementById('localCtxLen').value) || 8192,
+        keep_alive: document.getElementById('keepAlive').value,
+
+        online_provider: document.getElementById('onlineProvider').value,
+        online_auth_method: document.getElementById('authMethod').value,
+        online_username: document.getElementById('onlineUsername').value.trim(),
+        online_model: document.getElementById('onlineModel').value,
+        online_base_url: document.getElementById('onlineBaseUrl').value.trim(),
+        online_temperature: parseFloat(document.getElementById('onlineTemp').value) || 0.7,
+        online_max_tokens: parseInt(document.getElementById('onlineMaxTokens').value) || 4096,
+        opencode_path: document.getElementById('opencodePath').value.trim(),
+
+        router_mode: document.getElementById('routerMode').value,
+        router_threshold: parseInt(document.getElementById('routerThreshold').value) || 4,
+
+        workspace_default_path: document.getElementById('workspaceDefaultPath').value.trim() || '.',
+
+        save_history: document.getElementById('saveHistory').checked,
+        show_cost: document.getElementById('showCost').checked,
+        local_cost_per_1k: parseFloat(document.getElementById('localCost').value) || 0,
+        online_cost_per_1k_input: parseFloat(document.getElementById('onlineCostIn').value) || 0,
+        online_cost_per_1k_output: parseFloat(document.getElementById('onlineCostOut').value) || 0,
+
+        backup_enabled: document.getElementById('backupAutoEnabled').checked,
+        backup_interval_hours: parseInt(document.getElementById('backupInterval').value) || 24,
+        backup_destination: document.getElementById('backupDestPath').value.trim(),
+      };
+
+      // Include API key only if changed
+      const keyInp = document.getElementById('apiKey');
+      if (keyInp.value && keyInp.value !== '••••••••') {
+        body.api_key = keyInp.value;
+      }
+      // Include password only if changed
+      const pwdInp = document.getElementById('onlinePassword');
+      if (pwdInp.value && pwdInp.value !== '••••••••') {
+        body.online_password = pwdInp.value;
+      }
+
+      await api('/api/config', { method: 'PUT', body: JSON.stringify(body) });
+      await saveBackupSchedule();
+      document.getElementById('saveStatus').textContent = '✅ Salvato';
+      toast('Impostazioni salvate', 'success');
+      refreshSysInfo();
+    } catch(e) {
+      toast('Errore: ' + e.message, 'error');
+      document.getElementById('saveStatus').textContent = '❌ ' + e.message;
+    }
+    btn.disabled = false;
+    btn.textContent = '💾 Salva impostazioni';
+  }
+
+  async function testOllama() {
+    const url = document.getElementById('localOllamaUrl').value.trim();
+    const el = document.getElementById('ollamaTestResult');
+    el.className = 'test-result';
+    el.textContent = 'Test in corso...';
+    el.style.display = 'block';
+    try {
+      const r = await api('/api/config/test/ollama', {
+        method: 'POST',
+        body: JSON.stringify({ url }),
+      });
+      el.className = 'test-result ' + (r.ok ? 'ok' : 'err');
+      el.textContent = r.message;
+      if (r.ok && r.models) {
+        el.textContent = r.message + ' Modelli: ' + r.models.join(', ');
+        // Update model select
+        const sel = document.getElementById('localModel');
+        sel.innerHTML = r.models.map(m =>
+          `<option value="${m}" ${m === configCache.local_model ? 'selected' : ''}>${m}</option>`
+        ).join('');
+      }
+    } catch(e) {
+      el.className = 'test-result err';
+      el.textContent = 'Errore: ' + e.message;
+    }
+  }
+
+  async function testOnline() {
+    const provider = document.getElementById('onlineProvider').value;
+    const el = document.getElementById('onlineTestResult');
+    el.className = 'test-result';
+    el.textContent = 'Test in corso...';
+    el.style.display = 'block';
+    try {
+      const body = { provider };
+      if (provider === 'opencode') {
+        body.opencode_path = document.getElementById('opencodePath').value.trim();
+      } else {
+        const key = document.getElementById('apiKey').value;
+        if (key && key !== '••••••••') body.api_key = key;
+      }
+      const r = await api('/api/config/test/online', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      el.className = 'test-result ' + (r.ok ? 'ok' : 'err');
+      el.textContent = r.message;
+      if (r.ok && r.models) {
+        const sel = document.getElementById('onlineModel');
+        sel.innerHTML = r.models.map(m =>
+          `<option value="${m}" ${m === configCache.online_model ? 'selected' : ''}>${m}</option>`
+        ).join('');
+      }
+    } catch(e) {
+      el.className = 'test-result err';
+      el.textContent = 'Errore: ' + e.message;
+    }
+  }
+
+  async function resetConfig() {
+    if (!confirm('Ripristinare tutte le impostazioni ai valori predefiniti?')) return;
+    try {
+      await api('/api/config/reset', { method: 'POST' });
+      toast('Configurazione resettata', 'success');
+      loadSettings();
+      loadModels();
+    } catch(e) {
+      toast('Errore: ' + e.message, 'error');
+    }
+  }
+
+  let _fpCallback = null;
+  function pickWorkspaceDir() {
+    _fpCallback = function(path) {
+      document.getElementById('workspaceDefaultPath').value = path;
+    };
+    openFolderPicker(document.getElementById('workspaceDefaultPath').value.trim() || '.');
+  }
+
+  function pickExportDir() {
+    _fpCallback = function(path) {
+      document.getElementById('exportDestPath').value = path;
+    };
+    openFolderPicker(document.getElementById('exportDestPath').value.trim() || '~');
+  }
+
+  let _fpPath = '';
+  let _fpHome = '';
+  function openFolderPicker(startPath) {
+    document.getElementById('folderPickerOverlay').classList.add('open');
+    document.getElementById('fpNewDirName').value = '';
+    _fpPath = startPath || '.';
+    loadFolderPicker(_fpPath);
+  }
+  function closeFolderPicker() {
+    document.getElementById('folderPickerOverlay').classList.remove('open');
+    _fpCallback = null;
+  }
+  function confirmFolderPick() {
+    if (_fpCallback) _fpCallback(_fpPath);
+    closeFolderPicker();
+  }
+  async function fpCreateDir() {
+    const name = document.getElementById('fpNewDirName').value.trim();
+    if (!name) return toast('Inserisci un nome per la cartella', 'error');
+    try {
+      await api('/api/workspace/mkdir', {
+        method: 'POST',
+        body: JSON.stringify({ path: _fpPath + '/' + name }),
+      });
+      document.getElementById('fpNewDirName').value = '';
+      loadFolderPicker(_fpPath);
+    } catch(e) {
+      toast('Errore: ' + e.message, 'error');
+    }
+  }
+  async function loadFolderPicker(dir) {
+    dir = decodeURIComponent(dir);
+    const list = document.getElementById('fpList');
+    const pathEl = document.getElementById('fpCurrentPath');
+    try {
+      const data = await api('/api/workspace/tree?path=' + encodeURIComponent(dir));
+      _fpPath = data.path;
+      if (data.home) _fpHome = data.home;
+      pathEl.textContent = _fpPath;
+      let html = '';
+      if (_fpPath !== '/') {
+        const parent = _fpPath.split('/').slice(0, -1).join('/') || '/';
+        html += '<div class="fp-entry" onclick="loadFolderPicker(\'' + encodeURIComponent(parent) + '\')"><span class="fp-icon">📂</span><span class="fp-name">..</span></div>';
+      }
+      html += '<div class="fp-entry" onclick="loadFolderPicker(\'' + encodeURIComponent(_fpHome) + '\')" style="border-bottom:1px solid var(--border)"><span class="fp-icon">🏠</span><span class="fp-name">Home</span></div>';
+      html += '<div class="fp-entry" onclick="loadFolderPicker(\'/\')" style="border-bottom:1px solid var(--border)"><span class="fp-icon">💻</span><span class="fp-name">Root</span></div>';
+      const dirs = data.entries.filter(e => e.is_dir);
+      dirs.sort((a, b) => a.name.localeCompare(b.name));
+      for (const d of dirs) {
+        if (d.name.startsWith('.')) continue;
+        html += '<div class="fp-entry" onclick="loadFolderPicker(\'' + encodeURIComponent(d.path) + '\')"><span class="fp-icon">📁</span><span class="fp-name">' + escHtml(d.name) + '</span></div>';
+      }
+      if (!dirs.length && _fpPath === '/') {
+        html += '<span class="text-dim" style="padding:20px;display:block;text-align:center">Nessuna cartella</span>';
+      }
+      list.innerHTML = html;
+    } catch(e) {
+      list.innerHTML = '<span class="error" style="padding:20px;display:block;text-align:center">' + escHtml(e.message) + '</span>';
+    }
+  }
+
+  async function refreshSysInfo() {
+    try {
+      const [i, p] = await Promise.all([
+        api('/api/system/info'),
+        api('/api/profiles').catch(() => null),
+      ]);
+      const ok = (v, cls) => `<span style="color:var(--${cls})">${v}</span>`;
+
+      document.getElementById('sysOllama').innerHTML = i.ollama_running
+        ? ok('✅ Attivo (' + i.local_model + ')', 'green')
+        : ok('❌ Offline', 'red');
+
+      document.getElementById('sysOnline').innerHTML = i.online_configured
+        ? ok('✅ Configurato', 'green')
+        : ok('⚠ Non configurato', 'yellow');
+
+      document.getElementById('sysLocalModel').textContent = i.local_model || '-';
+      document.getElementById('sysOnlineModel').textContent = i.online_model || '-';
+      document.getElementById('sysProvider').textContent = i.online_provider || '-';
+      document.getElementById('sysCache').textContent = i.cache_entries + ' entries' + (i.cache_disk_mb ? ' (' + i.cache_disk_mb + ' MB)' : '');
+      document.getElementById('sysCalls').textContent = (i.total_calls || 0) + ' (' + (i.local_calls || 0) + ' locale / ' + (i.online_calls || 0) + ' online)';
+      document.getElementById('sysTokens').textContent = (i.total_tokens || 0).toLocaleString();
+      document.getElementById('sysTime').textContent = (i.total_time_s || 0).toFixed(1) + 's';
+      document.getElementById('sysHistory').textContent = (i.history_count || 0) + ' entries';
+      document.getElementById('sysBuildNumber').textContent = i.build_number || '0';
+      document.getElementById('sysProfileNameValue').textContent = (p && p.current) ? p.current : '-';
+      document.getElementById('sysUpdated').textContent = 'aggiornato: ' + new Date().toLocaleTimeString();
+    } catch(e) {}
+  }
+
+  // ── Manutenzione: Diagnosi, Backup, Update ──────────────────
+
+  async function runDiagnosis() {
+    const el = document.getElementById('diagResults');
+    el.innerHTML = '<span class="text-dim">⏳ Esecuzione autodiagnosi...</span>';
+    try {
+      const r = await api('/api/system/diagnose');
+      let html = '<table class="diag-table">';
+      const icon = { ok: '✅', warn: '⚠️', error: '❌', info: 'ℹ️' };
+      for (const c of r.checks) {
+        html += `<tr><td>${icon[c.status] || ''} ${c.check}</td><td class="diag-${c.status}">${escHtml(c.detail)}`;
+        if (c.fix) {
+          html += ` <button class="btn btn-xs" onclick="applyFix('${c.fix}', this)">🔧 Fix</button>`;
+        }
+        html += `</td></tr>`;
+      }
+      html += '</table>';
+      if (r.warnings > 0 || r.errors > 0) {
+        html += `<p class="text-sm mt-2" style="color:var(--${r.errors > 0 ? 'red' : 'yellow'})">${r.errors > 0 ? '❌ ' + r.errors + ' errori' : ''}${r.errors > 0 && r.warnings > 0 ? ' · ' : ''}${r.warnings > 0 ? '⚠️ ' + r.warnings + ' avvisi' : ''}</p>`;
+      } else {
+        html += '<p class="text-sm mt-2" style="color:var(--green)">✅ Sistema integro — nessun problema rilevato</p>';
+      }
+      html += `<p class="text-dim text-xs mt-1">Diagnosi completata: ${r.timestamp}</p>`;
+      el.innerHTML = html;
+    } catch(e) {
+      el.innerHTML = '<span class="error">Errore: ' + escHtml(e.message) + '</span>';
+    }
+  }
+
+  async function applyFix(fix, btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    try {
+      const r = await api('/api/system/diagnose/fix', {
+        method: 'POST',
+        body: JSON.stringify({ fix }),
+      });
+      toast(r.message || '✅ Corretto', 'success');
+      runDiagnosis();
+    } catch(e) {
+      toast('❌ ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '🔧 Fix';
+    }
+  }
+
+  async function checkDeps() {
+    const btn = document.getElementById('depsBtn');
+    const el = document.getElementById('depsResult');
+    btn.disabled = true;
+    btn.textContent = '⏳ Verifica librerie...';
+    el.innerHTML = '';
+    try {
+      const r = await api('/api/system/deps-check');
+      if (r.ok) {
+        if (r.total === 0) {
+          el.innerHTML = '<span style="color:var(--green)">✅ Tutte le librerie sono aggiornate</span>';
+        } else {
+          let html = '<table class="diag-table"><tr><th>Pacchetto</th><th>Installata</th><th>Disponibile</th></tr>';
+          for (const p of r.outdated) {
+            html += `<tr><td>${escHtml(p.name)}</td><td>${escHtml(p.installed)}</td><td style="color:var(--yellow)">${escHtml(p.latest)}</td></tr>`;
+          }
+          html += '</table>';
+          el.innerHTML = `<div style="margin-bottom:4px;color:var(--yellow)">⚠️ ${r.total} librerie da aggiornare</div>
+            <button class="btn btn-sm btn-primary" onclick="upgradeAllDeps()" style="margin-top:6px">📥 Aggiorna tutte</button>` + html;
+        }
+      } else {
+        el.innerHTML = '<span class="error">' + escHtml(r.error || 'Errore sconosciuto') + '</span>';
+      }
+    } catch(e) {
+      el.innerHTML = '<span class="error">' + escHtml(e.message) + '</span>';
+    }
+    btn.disabled = false;
+    btn.textContent = '📦 Verifica librerie';
+  }
+
+  async function upgradeAllDeps() {
+    const el = document.getElementById('depsResult');
+    if (!confirm('Aggiornare tutte le librerie obsolete tramite pip?')) return;
+    el.innerHTML = '<span class="text-dim">⏳ Aggiornamento librerie in corso... potrebbe richiedere alcuni minuti...</span>';
+    try {
+      const r = await api('/api/system/update', {
+        method: 'POST',
+        body: JSON.stringify({ mode: 'pip-upgrade-all' }),
+      });
+      if (r.ok) {
+        let msg = `<span style="color:var(--green)">✅ ${escHtml(r.message)}</span>`;
+        if (r.stdout) msg += '<pre style="font-size:0.7rem;margin-top:4px;max-height:150px;overflow:auto">' + escHtml(r.stdout) + '</pre>';
+        el.innerHTML = msg;
+      } else {
+        let msg = `<span style="color:var(--red)">❌ ${escHtml(r.error || r.message)}</span>`;
+        if (r.stderr) msg += '<pre style="font-size:0.7rem;margin-top:4px;max-height:150px;overflow:auto">' + escHtml(r.stderr) + '</pre>';
+        el.innerHTML = msg;
+      }
+    } catch(e) {
+      el.innerHTML = '<span class="error">' + escHtml(e.message) + '</span>';
+    }
+  }
+
+  async function aiSelfImprove() {
+    const btn = document.getElementById('aiImproveBtn');
+    const el = document.getElementById('aiResult');
+    btn.disabled = true;
+    btn.textContent = '🧠 Analisi in corso...';
+    el.innerHTML = '<span class="text-dim">⏳ Analisi del codice tramite AI online... potrebbe richiedere alcuni secondi...</span>';
+    try {
+      const r = await api('/api/system/update', {
+        method: 'POST',
+        body: JSON.stringify({ mode: 'ai' }),
+      });
+      if (r.ok && r.analysis) {
+        el.innerHTML = '<div style="margin-bottom:4px;color:var(--green)">✅ Analisi completata</div>' +
+          '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:0.8rem;line-height:1.5;white-space:pre-wrap;max-height:400px;overflow-y:auto">' +
+          escHtml(r.analysis) + '</div>';
+      } else {
+        el.innerHTML = '<span class="error">❌ ' + escHtml(r.error || 'Analisi fallita') + '</span>';
+      }
+    } catch(e) {
+      el.innerHTML = '<span class="error">' + escHtml(e.message) + '</span>';
+    }
+    btn.disabled = false;
+    btn.textContent = '🧠 Auto-miglioramento AI';
+  }
+
+  async function pipUpgrade() {
+    const btn = document.getElementById('updateBtn');
+    const el = document.getElementById('updateResult');
+    btn.disabled = true;
+    btn.textContent = '⏳ Aggiornamento...';
+    el.innerHTML = '';
+    try {
+      const ver = await api('/api/system/version');
+      el.innerHTML = `<span class="text-dim">Versione attuale: <strong>${escHtml(ver.version)}</strong></span><br><br>`;
+      const confirmUpdate = confirm('Versione attuale: ' + ver.version + '\n\nProcedere con pip install --upgrade ai-plus?');
+      if (!confirmUpdate) { btn.disabled = false; btn.textContent = '📥 Aggiornamento pip'; return; }
+      el.innerHTML += '<span class="text-dim">⏳ Aggiornamento in corso...</span>';
+      const upd = await api('/api/system/update', { method: 'POST', body: JSON.stringify({ mode: 'pip' }) });
+      if (upd.ok) {
+        el.innerHTML += '<span style="color:var(--green)">✅ ' + escHtml(upd.message) + '</span>';
+        if (upd.stdout) el.innerHTML += '<pre style="font-size:0.7rem;margin-top:4px;max-height:100px;overflow:auto">' + escHtml(upd.stdout.slice(-500)) + '</pre>';
+      } else {
+        el.innerHTML += '<span style="color:var(--red)">❌ ' + escHtml(upd.error || upd.message) + '</span>';
+        if (upd.stderr) el.innerHTML += '<pre style="font-size:0.7rem;margin-top:4px;max-height:100px;overflow:auto">' + escHtml(upd.stderr.slice(-500)) + '</pre>';
+      }
+    } catch(e) {
+      el.innerHTML = '<span class="error">' + escHtml(e.message) + '</span>';
+    }
+    btn.disabled = false;
+    btn.textContent = '📥 Aggiornamento pip';
+  }
+
+  async function createVersionedBackup() {
+    const label = prompt('Etichetta opzionale per questo backup (es. "prima del refactoring"):');
+    if (label === null) return;
+    const status = document.getElementById('backupStatus');
+    status.textContent = '⏳ Creazione backup versionato...';
+    try {
+      const r = await api('/api/backup/create', {
+        method: 'POST',
+        body: JSON.stringify({ label: label || '' }),
+      });
+      if (r.ok) {
+        status.textContent = '✓ Backup creato: ' + r.backup.id;
+        loadBackups();
+        setTimeout(() => status.textContent = '', 5000);
+      }
+    } catch(e) {
+      status.textContent = 'Errore: ' + e.message;
+    }
+  }
+
+  async function loadBackups() {
+    const el = document.getElementById('backupList');
+    try {
+      const r = await api('/api/backup/list');
+      if (!r.backups || !r.backups.length) {
+        el.innerHTML = '<span class="text-dim">Nessun backup disponibile</span>';
+        return;
+      }
+      let html = '';
+      for (const b of r.backups) {
+        const size = b.size_bytes > 1024 * 1024
+          ? (b.size_bytes / 1024 / 1024).toFixed(1) + ' MB'
+          : (b.size_bytes / 1024).toFixed(1) + ' KB';
+        html += '<div class="bk-card">' +
+          '<div class="bk-info">' +
+          (b.label ? '<div class="bk-label">' + escHtml(b.label) + '</div>' : '') +
+          '<div class="bk-id">' + escHtml(b.id) + '</div>' +
+          '<div><span class="bk-version">v' + escHtml(b.version) + '</span> · ' + escHtml(b.created) + ' · ' + size + '</div>' +
+          '</div>' +
+          '<div class="bk-actions">' +
+          '<button class="btn btn-sm" onclick="restoreBackup(\'' + b.id + '\')" title="Ripristina">📥</button>' +
+          '<button class="btn btn-sm btn-danger" onclick="deleteBackup(\'' + b.id + '\')" title="Elimina">🗑</button>' +
+          '</div></div>';
+      }
+      el.innerHTML = html;
+    } catch(e) {
+      el.innerHTML = '<span class="error">Errore: ' + escHtml(e.message) + '</span>';
+    }
+  }
+
+  async function restoreBackup(bid) {
+    if (!confirm('Ripristinare il backup "' + bid + '"? I dati correnti verranno sovrascritti.')) return;
+    const status = document.getElementById('backupStatus');
+    status.textContent = '⏳ Ripristino in corso...';
+    try {
+      const r = await api('/api/backup/restore/' + encodeURIComponent(bid), { method: 'POST' });
+      if (r.ok) {
+        status.textContent = '✓ Backup ripristinato. Ricarica la pagina per applicare le modifiche.';
+        setTimeout(() => location.reload(), 2000);
+      } else {
+        status.textContent = 'Errore: ' + (r.error || 'sconosciuto');
+      }
+    } catch(e) {
+      status.textContent = 'Errore: ' + e.message;
+    }
+  }
+
+  async function deleteBackup(bid) {
+    if (!confirm('Eliminare il backup "' + bid + '"?')) return;
+    try {
+      const r = await api('/api/backup/delete/' + encodeURIComponent(bid), { method: 'DELETE' });
+      if (r.ok) {
+        toast('Backup eliminato', 'success');
+        loadBackups();
+      }
+    } catch(e) {
+      toast('Errore: ' + e.message, 'error');
+    }
+  }
+
+  async function clearAllHistory() {
+    if (!confirm('Svuotare tutta la cronologia delle richieste?')) return;
+    try {
+      await api('/api/stats/reset', { method: 'POST' });
+      toast('Cronologia cancellata', 'success');
+      refreshSysInfo();
+    } catch(e) {
+      toast('Errore: ' + e.message, 'error');
+    }
+  }
+
+  async function clearCache() {
+    if (!confirm('Cancellare la cache temporanea? I dati utente (sessioni, KB, note) rimangono intatti.')) return;
+    try {
+      await api('/api/system/cache/clear', { method: 'POST' });
+      toast('Cache cancellata', 'success');
+      refreshSysInfo();
+    } catch(e) {
+      toast('Errore: ' + e.message, 'error');
+    }
+  }
+
+  async function optimizeMemory() {
+    try {
+      const r = await api('/api/system/optimize-memory', { method: 'POST' });
+      toast('Memoria ottimizzata: ' + r.gc_collected + ' oggetti raccolti', 'success');
+      refreshSysInfo();
+    } catch(e) {
+      toast('Errore: ' + e.message, 'error');
+    }
+  }
+
+  // ── Backup automatici ────────────────────────────────────────
+
+  function pickBackupDestDir() {
+    _fpCallback = function(path) {
+      document.getElementById('backupDestPath').value = path;
+    };
+    openFolderPicker(document.getElementById('backupDestPath').value.trim() || '~');
+  }
+
+  function toggleAutoBackup() {
+    const enabled = document.getElementById('backupAutoEnabled').checked;
+    document.getElementById('backupIntervalRow').style.display = enabled ? '' : 'none';
+  }
+
+  async function loadBackupSchedule() {
+    try {
+      const s = await api('/api/backup/schedule');
+      document.getElementById('backupAutoEnabled').checked = s.enabled;
+      document.getElementById('backupInterval').value = String(s.interval_hours || 24);
+      document.getElementById('backupDestPath').value = s.destination || '';
+      toggleAutoBackup();
+      const status = document.getElementById('backupScheduleStatus');
+      if (s.last_run > 0) {
+        status.textContent = 'Ultimo backup: ' + new Date(s.last_run * 1000).toLocaleString();
+      }
+    } catch(e) { /* non bloccante */ }
+  }
+
+  async function saveBackupSchedule() {
+    try {
+      await api('/api/backup/schedule', {
+        method: 'PUT',
+        body: JSON.stringify({
+          enabled: document.getElementById('backupAutoEnabled').checked,
+          interval_hours: parseInt(document.getElementById('backupInterval').value) || 24,
+          destination: document.getElementById('backupDestPath').value.trim(),
+        }),
+      });
+    } catch(e) {
+      toast('Errore salvataggio schedulazione: ' + e.message, 'error');
+    }
+  }
+
+  // ── Export Install Pack ───────────────────────────────────────
+
+  async function loadExportBuildCount() {
+    try {
+      const r = await api('/api/export/install-pack/build');
+      document.getElementById('exportBuildCount').textContent = r.build;
+    } catch(e) {}
+  }
+
+  async function exportInstallPack() {
+    const el = document.getElementById('exportResult');
+    const dest = document.getElementById('exportDestPath').value.trim();
+    if (!dest) { toast('Seleziona una cartella di destinazione', 'warn'); return; }
+    el.innerHTML = '<span class="text-dim">⏳ Generazione pacchetto...</span>';
+    try {
+      const res = await fetch('/api/export/install-pack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination: dest }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({error: res.statusText}));
+        throw new Error(err.error || res.statusText);
+      }
+      const data = await res.json();
+      const size = data.size > 1024 * 1024
+        ? (data.size / 1024 / 1024).toFixed(1) + ' MB'
+        : (data.size / 1024).toFixed(1) + ' KB';
+      el.innerHTML = `<span style="color:var(--green)">✅ Build #${data.build} salvato in ${escHtml(data.path)} (${size})</span>`;
+      toast('Install pack esportato (build #' + data.build + ')', 'success');
+      loadExportBuildCount();
+    } catch(e) {
+      el.innerHTML = '<span class="error">❌ ' + escHtml(e.message) + '</span>';
+    }
+  }
+
+  async function exportInstallPackDownload() {
+    const el = document.getElementById('exportResult');
+    el.innerHTML = '<span class="text-dim">⏳ Generazione pacchetto...</span>';
+    try {
+      const res = await fetch('/api/export/install-pack', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({error: res.statusText}));
+        throw new Error(err.error || res.statusText);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ai-plus-install-pack.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      const size = blob.size > 1024 * 1024
+        ? (blob.size / 1024 / 1024).toFixed(1) + ' MB'
+        : (blob.size / 1024).toFixed(1) + ' KB';
+      el.innerHTML = `<span style="color:var(--green)">✅ Pacchetto scaricato (${size})</span>`;
+      toast('Install pack scaricato', 'success');
+      loadExportBuildCount();
+    } catch(e) {
+      el.innerHTML = '<span class="error">❌ ' + escHtml(e.message) + '</span>';
+    }
+  }
+
+  async function pullModelFromSettings() {
+    const input = document.getElementById('pullModelInput');
+    const model = input.value.trim();
+    if (!model) { toast('Inserisci un nome modello', 'error'); return; }
+    const log = document.getElementById('pullLog');
+    log.textContent = '';
+    log.style.display = 'block';
+    log.innerHTML = 'Avvio download...\n';
+    input.disabled = true;
+    try {
+      const resp = await fetch('/api/models/pull', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ model })
+      });
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, {stream: true});
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const d = JSON.parse(line.slice(6));
+            if (d.type === 'output' || d.type === 'status') {
+              log.innerHTML += escHtml(d.message) + '\n';
+              log.scrollTop = log.scrollHeight;
+            } else if (d.type === 'done') {
+              log.innerHTML += '\n✅ ' + escHtml(d.message) + '\n';
+              toast('Modello scaricato!', 'success');
+              loadModels();
+            } else if (d.type === 'error') {
+              log.innerHTML += '\n❌ ' + escHtml(d.message) + '\n';
+              toast(d.message, 'error');
+            }
+          } catch(e) {}
+        }
+      }
+    } catch(e) {
+      log.innerHTML += '\n❌ ' + escHtml(String(e)) + '\n';
+      toast('Errore download', 'error');
+    }
+    input.disabled = false;
+  }
+
+  function changeLang(code) {
+    if (window.i18n) {
+      window.i18n.setLang(code);
+      // Update settings labels dynamically
+      if (window.i18n.applyTranslations) window.i18n.applyTranslations();
+    }
+    // Save lang via API
+    api('/api/config', {
+      method: 'POST',
+      body: JSON.stringify({ language: code }),
+    });
+  }
+
+  async function restartService() {
+    const msg = window.__ ? window.__('settings.restart.confirm') : 'Restart AI+ service? Unsaved data may be lost.';
+    if (!confirm(msg)) return;
+    try {
+      const r = await api('/api/system/restart', { method: 'POST' });
+      const reloadMsg = window.__ ? window.__('settings.restart.msg') : '⏳ Restarting... page will reload automatically.';
+      document.getElementById('saveStatus').textContent = reloadMsg;
+      // Poll until server goes down, then reload
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          await fetch('/api/system/info', { signal: AbortSignal.timeout(3000) });
+          // Server still up, keep waiting
+        } catch(e) {
+          clearInterval(poll);
+          // Wait for server to come back up, then reload
+          await new Promise(r => setTimeout(r, 3000));
+          location.reload();
+        }
+        if (attempts > 40) { clearInterval(poll); location.reload(); }
+      }, 1500);
+    } catch(e) {
+      // If fetch itself fails, server may have restarted already
+      document.getElementById('saveStatus').textContent = '⏳ Server riavviato, ricarico...';
+      await new Promise(r => setTimeout(r, 4000));
+      location.reload();
+    }
+  }
+
+  // ── GitHub Export ──
+
+  function pickGithubExportDir() {
+    _fpCallback = function(path) {
+      document.getElementById('githubExportPath').value = path;
+    };
+    openFolderPicker(document.getElementById('githubExportPath').value.trim() || '.');
+  }
+
+  async function exportToGithub() {
+    const btn = document.getElementById('githubExportBtn');
+    const result = document.getElementById('githubResult');
+    const repoUrl = document.getElementById('githubRepoUrl').value.trim();
+    if (!repoUrl) { toast('Inserisci l\'URL del repository GitHub', 'error'); return; }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Esportazione in corso...';
+    result.style.display = 'block';
+    result.innerHTML = '';
+
+    const body = {
+      repo_url: repoUrl,
+      branch: document.getElementById('githubBranch').value.trim() || 'main',
+      token: document.getElementById('githubToken').value || '',
+      export_path: document.getElementById('githubExportPath').value.trim() || '.',
+      commit_msg: document.getElementById('githubCommitMsg').value.trim() || ('auto: aggiornamento AI+ ' + new Date().toISOString().slice(0, 10)),
+    };
+
+    try {
+      const r = await api('/api/github/export', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      if (r.ok) {
+        result.innerHTML = '<span style="color:var(--green)">✅ ' + escHtml(r.message) + '</span>\n' + (r.log ? '<span style="color:var(--text-dim)">' + escHtml(r.log) + '</span>' : '');
+        toast('✅ Repository esportato su GitHub', 'success');
+      } else {
+        result.innerHTML = '<span style="color:var(--red)">❌ ' + escHtml(r.error || r.message) + '</span>\n' + (r.log ? '<span style="color:var(--text-dim)">' + escHtml(r.log) + '</span>' : '');
+        toast('❌ Errore: ' + (r.error || r.message), 'error');
+      }
+    } catch(e) {
+      result.innerHTML = '<span style="color:var(--red)">❌ ' + escHtml(e.message) + '</span>';
+      toast('Errore: ' + e.message, 'error');
+    }
+    btn.disabled = false;
+    btn.textContent = '🐙 Esporta su GitHub';
+  }
+
+  async function githubCheckStatus() {
+    const result = document.getElementById('githubResult');
+    result.style.display = 'block';
+    result.innerHTML = '<span class="text-dim">⏳ Verifica stato git...</span>';
+    try {
+      const r = await api('/api/github/status', {
+        method: 'POST',
+        body: JSON.stringify({ path: document.getElementById('githubExportPath').value.trim() || '.' }),
+      });
+      let html = '';
+      if (r.git_installed) html += '✅ Git installato: ' + escHtml(r.git_version) + '\n';
+      else html += '❌ Git non installato\n';
+      if (r.is_repo) html += '✅ Git repository inizializzato\n';
+      else html += '⚠ Directory non è un repository git\n';
+      if (r.remote_url) html += '🔗 Remote: ' + escHtml(r.remote_url) + '\n';
+      else html += '⚠ Nessun remote configurato\n';
+      if (r.branch) html += '🌿 Branch corrente: ' + escHtml(r.branch) + '\n';
+      if (r.files_to_commit !== undefined) html += '📄 File non tracciati/modificati: ' + r.files_to_commit + '\n';
+      if (r.last_commit) html += '🕐 Ultimo commit: ' + escHtml(r.last_commit) + '\n';
+      result.innerHTML = '<pre style="margin:0">' + html + '</pre>';
+    } catch(e) {
+      result.innerHTML = '<span style="color:var(--red)">❌ ' + escHtml(e.message) + '</span>';
+    }
+  }
+
+  // Init
+  loadModels();
+  loadSettings();
+  refreshSysInfo();
+  loadBackups();
+  loadBackupSchedule();
+  loadExportBuildCount();
+</script>
+
+<div class="folder-picker-overlay" id="folderPickerOverlay" onclick="if(event.target===this)closeFolderPicker()">
+  <div class="folder-picker">
+    <h3>📁 Seleziona cartella</h3>
+    <div class="fp-path" id="fpCurrentPath">/</div>
+    <div style="display:flex;gap:4px;margin-bottom:6px">
+      <input type="text" id="fpNewDirName" placeholder="nome nuova cartella" style="flex:1;font-size:0.8rem;padding:3px 8px" onkeydown="if(event.key==='Enter')fpCreateDir()">
+      <button class="btn btn-sm" onclick="fpCreateDir()" title="Crea cartella">📁+</button>
+    </div>
+    <div class="fp-list" id="fpList">
+      <span class="text-dim" style="padding:20px;display:block;text-align:center">Caricamento...</span>
+    </div>
+    <div class="fp-actions">
+      <button class="btn" onclick="closeFolderPicker()">Annulla</button>
+      <button class="btn btn-primary" onclick="confirmFolderPick()">Seleziona</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

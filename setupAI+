@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""
+setupAI+  —  AI+ Universal Installer
+
+Single command: python3 setupAI+
+On Windows:     setupAI+.bat
+
+Result: AI+ web platform at http://localhost:8081
+
+What it does:
+  ✓ Checks Python 3.10+
+  ✓ Creates isolated virtual environment
+  ✓ Installs all dependencies
+  ✓ Sets up CLI commands (hy, ai-plus)
+  ✓ Creates default config (port 8081)
+  ✓ Starts the web server on http://localhost:8081
+
+Supported platforms: Linux, macOS, Windows
+"""
+import os
+import sys
+import io
+import json
+import shutil
+import subprocess
+import platform
+import urllib.request
+from pathlib import Path
+
+VERSION = "2.0.0"
+MIN_PYTHON = (3, 10)
+WEB_PORT = 8081
+
+SYSTEM = platform.system()
+IS_WIN = SYSTEM == "Windows"
+IS_MAC = SYSTEM == "Darwin"
+IS_LINUX = SYSTEM == "Linux"
+
+if IS_WIN:
+    os.system("color")
+CYAN = "\033[36m"; GREEN = "\033[32m"; YELLOW = "\033[33m"
+RED = "\033[31m"; BOLD = "\033[1m"; NC = "\033[0m"
+
+
+def info(m): print(f"{CYAN}{BOLD}[INFO]{NC}  {m}")
+def ok(m):   print(f"{GREEN}{BOLD}[OK]{NC}    {m}")
+def warn(m): print(f"{YELLOW}{BOLD}[WARN]{NC}  {m}")
+def err(m):  print(f"{RED}{BOLD}[ERR]{NC}   {m}"); sys.exit(1)
+
+
+def run(cmd, **kw):
+    if not kw.get("hide"):
+        info("Eseguo: " + " ".join(str(c) for c in cmd))
+    kw.setdefault("check", True)
+    kw.setdefault("timeout", 300)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=kw["timeout"])
+        if kw["check"] and r.returncode != 0:
+            err(f"Comando fallito (exit={r.returncode}):\n{r.stderr.strip()}")
+        return r
+    except FileNotFoundError:
+        err(f"Comando non trovato: {cmd[0]}")
+    except subprocess.TimeoutExpired:
+        err(f"Timeout: {' '.join(str(c) for c in cmd)}")
+
+
+def find_source_dir():
+    src = Path(__file__).resolve().parent
+    for p in [src, src / "src", src / ".."]:
+        if (p / "setup.py").exists():
+            return p.resolve()
+    err("setup.py non trovato. Esegui questo script nella directory del progetto.")
+
+
+def step_check_python():
+    v = sys.version_info
+    if v >= MIN_PYTHON:
+        ok(f"Python {v.major}.{v.minor}.{v.micro}")
+        return
+    print(f"\n{RED}Python {v.major}.{v.minor} non supportato. Serve Python 3.10+.{NC}")
+    print(f"  Scarica:  https://www.python.org/downloads/")
+    if IS_MAC and shutil.which("brew"):
+        print(f"  Esegui:    brew install python@3.11")
+    if IS_LINUX:
+        print(f"  Esegui:    sudo apt-get install python3 python3-pip python3-venv")
+    sys.exit(1)
+
+
+def make_config_py(install_dir, python):
+    """Crea file config.yaml con port 8081 e valori predefiniti corretti."""
+    from hycoder.config import CONFIG_DIR, DEFAULT_CONFIG, save_config
+    cfg = dict(DEFAULT_CONFIG)
+    cfg.setdefault("web", {})["port"] = WEB_PORT
+    cfg["configured"] = True
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    save_config(cfg)
+    ok("Configurazione creata (porta " + str(WEB_PORT) + ")")
+
+
+def step_setup_venv(install_dir, src_dir):
+    venv = install_dir / ".venv"
+    if not venv.exists():
+        run([sys.executable, "-m", "venv", str(venv)])
+    ok(f"Virtual env: {venv}")
+    python = venv / ("Scripts" if IS_WIN else "bin") / "python"
+    pip = venv / ("Scripts" if IS_WIN else "bin") / "pip"
+    return venv, python, pip
+
+
+def step_install_deps(python, pip, src_dir):
+    info("Aggiornamento pip...")
+    run([str(pip), "install", "--upgrade", "pip", "-q"])
+    req = src_dir / "requirements.txt"
+    if req.exists():
+        info("Installazione dipendenze...")
+        run([str(pip), "install", "-r", str(req), "-q"])
+    info("Installazione AI+...")
+    run([str(pip), "install", "-e", str(src_dir), "-q"])
+    ok("Dipendenze installate")
+
+
+def step_setup_cli(python, venv, install_dir):
+    bin_dir = Path.home() / ".local" / "bin"
+    if IS_WIN:
+        bin_dir = Path(os.environ.get("USERPROFILE", "C:\\")) / ".local" / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("hy", "ai-plus"):
+        if IS_WIN:
+            wrapper = bin_dir / f"{name}.cmd"
+            wrapper.write_text(
+                f'@echo off\r\n'
+                f'call "{venv / "Scripts" / "activate.bat"}\r\n'
+                f'python -m hycoder.cli %*\r\n'
+            )
+        else:
+            wrapper = bin_dir / name
+            wrapper.write_text(
+                f'#!/usr/bin/env bash\n'
+                f'source "{venv / "bin" / "activate"}\n'
+                f'exec "{python}" -m hycoder.cli "$@"\n'
+            )
+            wrapper.chmod(0o755)
+        ok(f"Comando: {wrapper}")
+    if not IS_WIN:
+        for rc in (Path.home() / ".zshrc", Path.home() / ".bashrc"):
+            if rc.exists():
+                line = f'\nexport PATH="$PATH:{bin_dir}"\n'
+                if line.strip() not in rc.read_text():
+                    with open(rc, "a") as f:
+                        f.write(line)
+                    info(f"PATH aggiornato in {rc}. Riapri il terminale.")
+                break
+
+
+def step_install_opencode():
+    """Check and install opencode CLI."""
+    if shutil.which("opencode"):
+        ok("opencode CLI: gia' installato")
+        return
+    info("Installazione opencode CLI in corso...")
+    try:
+        if IS_MAC:
+            run(["brew", "install", "opencode"], timeout=120)
+        elif IS_LINUX:
+            run(["curl", "-fsSL", "https://opencode.ai/install.sh", "-o", "/tmp/opencode-install.sh"])
+            run(["sh", "/tmp/opencode-install.sh"], timeout=120)
+        elif IS_WIN:
+            run(["powershell", "-Command",
+                 "iwr -Uri https://opencode.ai/install.ps1 -OutFile $env:TEMP\\opencode-install.ps1; "
+                 "& $env:TEMP\\opencode-install.ps1"], timeout=120)
+        ok("opencode CLI installato")
+    except Exception as e:
+        warn(f"opencode CLI non installato: {e}")
+        warn("Installalo manualmente: https://opencode.ai")
+
+def step_install_ollama():
+    if shutil.which("ollama"):
+        ok("Ollama: gia' installato")
+        return
+    info("Installazione Ollama in corso...")
+    try:
+        if IS_MAC and shutil.which("brew"):
+            run(["brew", "install", "ollama"], timeout=120)
+        elif IS_LINUX:
+            run(["curl", "-fsSL", "https://ollama.com/install.sh", "-o", "/tmp/ollama-install.sh"])
+            run(["sh", "/tmp/ollama-install.sh"], timeout=120)
+        elif IS_WIN:
+            tmp = os.environ.get("TEMP", "C:\\Temp")
+            import urllib.request
+            urllib.request.urlretrieve(
+                "https://ollama.com/download/OllamaSetup.exe",
+                os.path.join(tmp, "OllamaSetup.exe"))
+            run([os.path.join(tmp, "OllamaSetup.exe"), "/S"], timeout=120)
+        ok("Ollama installato")
+    except Exception as e:
+        warn(f"Ollama non installato: {e}")
+        warn("Installalo manualmente: https://ollama.com")
+
+
+def step_pull_model(python):
+    """Scarica modello locale predefinito (silenzioso)."""
+    try:
+        import requests
+        r = requests.get("http://localhost:11434/api/tags", timeout=3)
+        if r.status_code == 200:
+            from hycoder.config import load_config
+            cfg = load_config()
+            model = cfg.get("local", {}).get("model", "")
+            if model:
+                info(f"Download modello {model}...")
+                requests.post("http://localhost:11434/api/pull",
+                              json={"name": model}, timeout=1)
+    except Exception:
+        pass
+
+
+def main():
+    install_dir = Path.home() / "ai-plus"
+    if IS_WIN:
+        install_dir = Path(os.environ.get("USERPROFILE", "C:\\")) / "ai-plus"
+
+    print(f"""
+{CYAN}{BOLD}╔══════════════════════════════════════════════════════════════╗{NC}
+{CYAN}{BOLD}║               AI+  —  Installazione automatica            ║{NC}
+{CYAN}{BOLD}║           Assistente AI ibrido  v{VERSION}                   ║{NC}
+{CYAN}{BOLD}╚══════════════════════════════════════════════════════════════╝{NC}
+  {BOLD}Sistema:{NC}    {SYSTEM} / {platform.machine()}
+  {BOLD}Python:{NC}     {sys.version.split()[0]}
+  {BOLD}Directory:{NC}  {install_dir}
+""")
+
+    step_check_python()
+    src_dir = find_source_dir()
+    install_dir.mkdir(parents=True, exist_ok=True)
+
+    # Setup virtual environment
+    venv, python, pip = step_setup_venv(install_dir, src_dir)
+
+    # Copy source code
+    project = install_dir / "src"
+    if project.exists() and (project / "setup.py").exists():
+        ok(f"Codice gia' presente: {project}")
+    else:
+        if project.exists():
+            shutil.rmtree(project)
+        shutil.copytree(str(src_dir), str(project),
+                        ignore=shutil.ignore_patterns(
+                            "__pycache__", "*.pyc", ".egg-info",
+                            ".pytest_cache", ".git", ".venv",
+                            "node_modules", ".DS_Store"))
+        ok(f"Codice copiato in: {project}")
+
+    # Install dependencies
+    step_install_deps(python, pip, project)
+
+    # CLI wrappers
+    step_setup_cli(python, venv, install_dir)
+
+    # Config
+    info("Configurazione iniziale...")
+    run([str(python), "-c",
+         f"import sys, json; sys.path.insert(0, '{project}'); "
+         f"from hycoder.config import CONFIG_DIR, DEFAULT_CONFIG, save_config; "
+         f"cfg = dict(DEFAULT_CONFIG); "
+         f"cfg.setdefault('web', {{}})['port'] = {WEB_PORT}; "
+         f"cfg['configured'] = True; "
+         f"save_config(cfg); print('OK')"],
+        hide=True)
+    ok("Configurazione creata (porta " + str(WEB_PORT) + ")")
+
+    # Prerequisiti
+    step_install_opencode()
+    step_install_ollama()
+
+    # Aggiornamento librerie
+    info("Aggiornamento librerie Python...")
+    run([str(pip), "install", "--upgrade", "pip", "setuptools", "wheel", "-q"])
+    run([str(pip), "list", "--outdated", "--format=columns"], check=False)
+    run([str(pip), "install", "--upgrade", "-r", str(project / "requirements.txt"), "-q"], check=False)
+
+    # Avvio web server
+    port = WEB_PORT
+    url = f"http://localhost:{port}"
+    url_alias = "http://ai+.org"
+    print(f"""
+{GREEN}{BOLD}╔══════════════════════════════════════════════════════════════╗{NC}
+{GREEN}{BOLD}║              AI+ — Installazione completata!                ║{NC}
+{GREEN}{BOLD}╚══════════════════════════════════════════════════════════════╝{NC}
+
+  {BOLD}Directory:{NC}         {install_dir}
+      {BOLD}Web UI:{NC}            {CYAN}{url}{NC}
+      {BOLD}Alias:{NC}             {CYAN}{url_alias}{NC}
+
+      {BOLD}Comandi:{NC}
+    {CYAN}hy 'prompt'{NC}          chat da terminale
+    {CYAN}hy web{NC}               riavvia interfaccia web
+    {CYAN}hy pack{NC}              genera pacchetto installazione
+""")
+
+    import webbrowser
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+    try:
+        webbrowser.open(url_alias)
+    except Exception:
+        pass
+    info(f"Avvio server web su {url} ...\n")
+    sys.stdout.flush()
+
+    cmd = [str(python), "-m", "hycoder.cli", "web", "--port", str(WEB_PORT)]
+    if IS_WIN:
+        subprocess.run(cmd)
+    else:
+        os.execvp(str(python), cmd)
+
+
+if __name__ == "__main__":
+    main()

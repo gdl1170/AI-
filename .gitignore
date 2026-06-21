@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.env
+*.local
+.DS_Store
+.hybrid-coder/
+*.log
+.pytest_cache/
+.coverage
+htmlcov/

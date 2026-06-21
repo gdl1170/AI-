@@ -1,0 +1,268 @@
+{% extends "layout.html" %}
+{% block title %}Notes{% endblock %}
+{% block heading %}📓 Notes (Obsidian-style){% endblock %}
+{% block content %}
+<style>
+    .notes-layout { display: flex; gap: 16px; max-width: 1100px; margin: 0 auto; min-height: 70vh; }
+    .notes-sidebar { width: 280px; min-width: 280px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .notes-sidebar input { width: 100%; }
+    .notes-sidebar .tag { display: inline-block; font-size: 0.75rem; padding: 2px 6px; border-radius: 3px; background: var(--bg-dim); color: var(--accent); cursor: pointer; margin: 2px; }
+    .notes-sidebar .tag:hover { background: var(--accent); color: #fff; }
+    .notes-main { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+    .note-card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; cursor: pointer; }
+    .note-card:hover { border-color: var(--accent); }
+    .note-card .title { font-weight: 600; font-size: 1rem; }
+    .note-card .meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+    .note-card .tags { margin-top: 6px; }
+    .note-card .preview { font-size: 0.85rem; color: var(--text-dim); margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .note-editor { display: flex; flex-direction: column; gap: 8px; }
+    .note-editor input, .note-editor textarea { width: 100%; }
+    .note-editor textarea { min-height: 300px; font-family: monospace; font-size: 0.85rem; }
+    .note-view { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 20px; }
+    .note-view h2 { margin: 0 0 8px; }
+    .note-view .meta { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 12px; }
+    .note-view .body { line-height: 1.7; }
+    .note-view .body a.wiki-link { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+    .note-view .body a.wiki-link.broken { color: var(--orange); }
+    .backlinks { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .backlinks a { display: block; padding: 4px 0; color: var(--accent); font-size: 0.85rem; }
+    .graph-container { width: 100%; height: 520px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .vis-network:focus { outline: none; }
+    .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
+</style>
+
+<div class="notes-layout">
+    <div class="notes-sidebar">
+        <input type="text" id="noteSearch" placeholder="Cerca note..." oninput="searchNotes()" data-i18n="notes.search.placeholder">
+        <div style="display:flex;gap:4px;flex-wrap:wrap" id="tagList"></div>
+        <hr style="border-color:var(--border);margin:4px 0">
+        <button class="btn btn-primary btn-sm" onclick="showEditor()" data-i18n="notes.new_note">✏ Nuova nota</button>
+        <button class="btn btn-sm" onclick="showGraph()" data-i18n="notes.graph">🔗 Grafo</button>
+        <button class="btn btn-sm" onclick="showDiskUsage()" data-i18n="notes.disk">💾 Disco</button>
+        <button class="btn btn-sm" onclick="showCommands()" data-i18n="notes.commands">⚡ Comandi</button>
+        <div id="diskInfo" style="font-size:0.75rem;color:var(--text-dim);margin-top:8px"></div>
+    </div>
+    <div class="notes-main" id="notesMain">
+        <div class="empty-state"><span data-i18n="notes.empty.title">Seleziona o crea una nota.</span><br><span data-i18n="notes.empty.hint">Usa [[wiki link]] per collegare note tra loro.</span></div>
+    </div>
+</div>
+
+<script>
+    let allNotes = [];
+    let currentSlug = null;
+
+    async function loadNotes() {
+        allNotes = await api('/api/notes');
+        renderNotes(allNotes);
+        const tags = [...new Set(allNotes.flatMap(n => n.tags || []))].sort();
+        document.getElementById('tagList').innerHTML = tags.map(t => `<span class="tag" onclick="filterTag('${t}')">#${t}</span>`).join('');
+    }
+
+    function renderNotes(notes) {
+        const m = document.getElementById('notesMain');
+        if (!notes.length) {
+            m.innerHTML = '<div class="empty-state">' + __('notes.list.empty') + '<br><button class="btn btn-primary" onclick="showEditor()">' + __('notes.list.create_first') + '</button></div>';
+            return;
+        }
+        m.innerHTML = notes.map(n => `
+            <div class="note-card" onclick="openNote('${n.slug}')">
+                <div class="title">${escHtml(n.title)}</div>
+                <div class="meta">${n.modified ? n.modified.slice(0,10) : ''} · ${__('notes.card.links', {n: n.links?.length || 0})}</div>
+                <div class="tags">${(n.tags || []).map(t => `<span class="tag">#${t}</span>`).join('')}</div>
+            </div>
+        `).join('');
+    }
+
+    async function openNote(slug) {
+        currentSlug = slug;
+        const n = await api('/api/notes/' + slug);
+        const m = document.getElementById('notesMain');
+        const body = escHtml(n.body || '').replace(/\[\[([^\]]+)\]\]/g, (m, link) => {
+            const slug = link.split('|')[0].trim().toLowerCase().replace(/ /g, '-');
+            return `<a href="#" class="wiki-link" onclick="openNote('${slug}');return false">${link}</a>`;
+        });
+        let html = `<div class="note-view">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <h2>${escHtml(n.title)}</h2>
+                <div>
+                    <button class="btn btn-sm" onclick="editNote('${n.slug}')">✏</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteNote('${n.slug}')">🗑</button>
+                </div>
+            </div>
+            <div class="meta">${(n.tags || []).map(t => `<span class="tag">#${t}</span>`).join(' ')} · ${n.modified ? n.modified.slice(0,10) : ''} · ${__('notes.card.links', {n: n.links?.length || 0})}</div>
+            <div class="body">${body.replace(/\\n/g, '<br>')}</div>`;
+        if (n.backlinks && n.backlinks.length) {
+            html += `<div class="backlinks"><strong>${__('notes.view.backlinks', {n: n.backlinks.length})}</strong>`;
+            html += n.backlinks.map(b => `<a href="#" onclick="openNote('${b.slug}');return false">${escHtml(b.title)}</a>`).join('');
+            html += '</div>';
+        }
+        html += '</div>';
+        m.innerHTML = html;
+    }
+
+    let editingSlug = null;
+    function showEditor(note) {
+        editingSlug = note?.slug || null;
+        const m = document.getElementById('notesMain');
+        m.innerHTML = `<div class="note-editor">
+            <input type="text" id="noteTitle" placeholder="${__('notes.editor.title_placeholder')}" value="${note ? escHtml(note.title) : ''}">
+            <input type="text" id="noteTags" placeholder="${__('notes.editor.tags_placeholder')}" value="${note ? (note.tags || []).join(', ') : ''}">
+            <textarea id="noteBody" placeholder="${__('notes.editor.body_placeholder')}">${note ? escHtml(note.body || '') : ''}</textarea>
+            <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="saveNote()">${__('notes.editor.save')}</button>
+                <button class="btn" onclick="loadNotes()">${__('common.cancel')}</button>
+            </div>
+        </div>`;
+        document.getElementById('noteTitle').focus();
+    }
+
+    async function saveNote() {
+        const title = document.getElementById('noteTitle').value.trim();
+        if (!title) return toast(__('notes.toast.title_required'), 'error');
+        const tags = document.getElementById('noteTags').value.split(',').map(t => t.trim()).filter(Boolean);
+        const body = document.getElementById('noteBody').value;
+        try {
+            if (editingSlug) {
+                await api('/api/notes/' + editingSlug, { method: 'PUT', body: JSON.stringify({ title, body, tags }) });
+                toast(__('notes.toast.updated'), 'success');
+            } else {
+                await api('/api/notes', { method: 'POST', body: JSON.stringify({ title, body, tags }) });
+                toast(__('notes.toast.created'), 'success');
+            }
+            loadNotes();
+        } catch(e) { toast(__('common.error') + ': ' + e.message, 'error'); }
+    }
+
+    async function editNote(slug) {
+        const n = await api('/api/notes/' + slug);
+        showEditor(n);
+    }
+
+    async function deleteNote(slug) {
+        if (!confirm(__('notes.delete.confirm'))) return;
+        await api('/api/notes/' + slug, { method: 'DELETE' });
+        toast(__('notes.delete.deleted'), 'success');
+        loadNotes();
+    }
+
+    function searchNotes() {
+        const q = document.getElementById('noteSearch').value.toLowerCase();
+        if (!q) { renderNotes(allNotes); return; }
+        renderNotes(allNotes.filter(n => n.title.toLowerCase().includes(q) || (n.tags || []).some(t => t.includes(q))));
+    }
+
+    function filterTag(tag) {
+        renderNotes(allNotes.filter(n => (n.tags || []).includes(tag)));
+        document.getElementById('noteSearch').value = '#' + tag;
+    }
+
+    let _notesNetwork = null;
+
+    async function showGraph() {
+        const m = document.getElementById('notesMain');
+        m.innerHTML = '<div id="notesGraph" style="width:100%;height:520px;background:var(--bg);border:1px solid var(--border);border-radius:6px"></div><div id="notesGraphInfo" class="text-dim text-sm mt-1" style="text-align:center"></div>';
+
+        if (typeof vis === 'undefined') {
+            const s = document.createElement('script');
+            s.src = 'https://unpkg.com/vis-network/standalone/umd/vis-network.min.js';
+            await new Promise(r => { s.onload = r; s.onerror = r; document.head.appendChild(s); });
+        }
+
+        try {
+            const g = await api('/api/notes/graph');
+            const container = document.getElementById('notesGraph');
+            if (!g.nodes?.length) {
+                container.innerHTML = '<div class="empty-state" style="padding:240px 0">' + __('notes.graph.empty') + '</div>';
+                document.getElementById('notesGraphInfo').textContent = __('notes.graph.zero_nodes');
+                return;
+            }
+            document.getElementById('notesGraphInfo').textContent = __('notes.graph.info', {nodes: g.nodes.length, edges: g.edges.length});
+
+            const maxNodes = 400;
+            const usedNodes = g.nodes.slice(0, maxNodes);
+            const usedIds = new Set(usedNodes.map(n => n.id));
+            const usedEdges = g.edges.filter(e => usedIds.has(e.source) && usedIds.has(e.target));
+
+            const visNodes = usedNodes.map(n => ({
+                id: n.id,
+                label: (n.label || n.id).slice(0, 20),
+                title: `<strong>${escHtml(n.label || n.id)}</strong>` + (n.tags ? `<br><small>${escHtml(n.tags.join(', '))}</small>` : ''),
+                color: { background: '#58a6ff', border: '#fff3' },
+                borderWidth: 1,
+                size: 7 + Math.min(n.links_count || 0, 15),
+                font: { color: '#8b949e', size: 11, strokeWidth: 0 },
+            }));
+
+            const visEdges = usedEdges.map(e => ({
+                from: e.source, to: e.target,
+                color: { color: '#30363d', opacity: 0.35 },
+                width: 0.5,
+                arrows: 'to',
+                smooth: { type: 'curvedCCW' },
+            }));
+
+            const data = { nodes: new vis.DataSet(visNodes), edges: new vis.DataSet(visEdges) };
+            const options = {
+                nodes: { shape: 'dot', scaling: { min: 6, max: 22 } },
+                edges: { smooth: { type: 'curvedCCW' } },
+                physics: {
+                    solver: 'barnesHut',
+                    barnesHut: { gravitationalConstant: -4000, springConstant: 0.003, springLength: 150 },
+                    stabilization: { iterations: 100 },
+                },
+                interaction: {
+                    hover: true, tooltipDelay: 200, navigationButtons: true, keyboard: true,
+                },
+            };
+
+            _notesNetwork = new vis.Network(container, data, options);
+
+            _notesNetwork.on('click', function(params) {
+                if (params.nodes.length) {
+                    const nodeId = params.nodes[0];
+                    const node = usedNodes.find(n => n.id === nodeId);
+                    if (node) {
+                        viewNote(node.id);
+                    }
+                }
+            });
+
+            _notesNetwork.on('doubleClick', function(params) {
+                if (params.nodes.length) {
+                    _notesNetwork.focus(params.nodes[0], { scale: 2, animation: true });
+                }
+            });
+
+        } catch(e) {
+            document.getElementById('notesGraph').innerHTML = '<div class="error" style="text-align:center;padding:240px 0">' + escHtml(e.message) + '</div>';
+        }
+    }
+
+    async function showDiskUsage() {
+        const d = await api('/api/system/disk');
+        const el = document.getElementById('diskInfo');
+        el.innerHTML = Object.entries(d).map(([k, v]) => {
+            if (k === 'system') return __('notes.disk.system', {used: v.used_gb, total: v.total_gb, free: v.free_gb});
+            return __('notes.disk.directory', {name: k, size: v.size_mb, files: v.files});
+        }).join('<br>');
+    }
+
+    async function showCommands() {
+        const c = await api('/api/commands/list');
+        const m = document.getElementById('notesMain');
+        m.innerHTML = `<div class="note-view"><h2>` + __('notes.commands') + `</h2>`;
+        for (const [group, cmds] of Object.entries(c)) {
+            m.innerHTML += `<h3 style="margin-top:16px">${group.toUpperCase()}</h3>`;
+            m.innerHTML += cmds.map(cmd => `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.85rem">
+                <strong style="color:var(--accent)">${cmd.name}</strong>
+                <span class="text-dim"> — ${cmd.desc}</span>
+                ${cmd.usage ? `<br><code style="font-size:0.75rem">${cmd.usage}</code>` : ''}
+            </div>`).join('');
+        }
+        m.innerHTML += '</div>';
+    }
+
+    loadNotes();
+    showDiskUsage();
+</script>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends "layout.html" %}
+{% block title %}Prompt Library{% endblock %}
+{% block heading %}📋 Prompt Library{% endblock %}
+{% block content %}
+<style>
+    .prompts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 1000px; margin: 0 auto; }
+    .prompt-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; cursor: pointer; transition: border-color 0.15s; }
+    .prompt-card:hover { border-color: var(--blue); }
+    .prompt-card h4 { margin: 0 0 4px; font-size: 0.95rem; }
+    .prompt-card .p-preview { font-size: 0.8rem; color: var(--text-dim); margin: 6px 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .prompt-card .p-meta { font-size: 0.7rem; color: var(--text-dim); display: flex; gap: 8px; flex-wrap: wrap; }
+    .prompt-card .p-tag { display: inline-block; padding: 2px 8px; border-radius: 8px; background: rgba(88,166,255,0.1); color: var(--blue); font-size: 0.65rem; }
+    .prompt-card .p-actions { margin-top: 8px; display: flex; gap: 6px; }
+    .prompt-card .p-actions button { font-size: 0.7rem; padding: 3px 8px; }
+    .prompt-editor { max-width: 800px; margin: 0 auto; }
+    .prompt-editor textarea { min-height: 200px; font-family: 'SF Mono', monospace; }
+    .var-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: rgba(210,168,255,0.1); color: var(--purple); font-size: 0.7rem; margin: 2px; font-family: monospace; }
+    .empty-prompts { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+    .empty-prompts .big-icon { font-size: 3rem; margin-bottom: 12px; }
+</style>
+
+<div class="prompts-grid" id="promptsGrid"></div>
+<div class="empty-prompts" id="emptyPrompts">
+    <div class="big-icon">📋</div>
+    <p data-i18n="prompts.empty.title">Nessun prompt salvato.</p>
+    <p class="text-dim text-sm" data-i18n="prompts.empty.description">Crea il tuo primo prompt per riutilizzarlo velocemente nelle conversazioni.</p>
+    <button class="btn btn-primary mt-4" onclick="showPromptEditor()" data-i18n="prompts.empty.new_prompt">➕ Nuovo prompt</button>
+</div>
+
+<!-- Prompt Editor Modal -->
+<div class="modal-overlay" id="promptModal">
+    <div class="modal prompt-editor">
+        <div class="flex-between mb-4">
+            <h3 id="promptModalTitle" data-i18n="prompts.modal.title_new">Nuovo prompt</h3>
+            <button class="btn btn-sm" onclick="closePromptEditor()" data-i18n="common.close">✕</button>
+        </div>
+        <div class="form-group">
+            <label data-i18n="prompts.modal.name">Nome</label>
+            <input id="promptName" data-i18n="prompts.modal.name_placeholder" placeholder="Es. Code Review Template">
+        </div>
+        <div class="form-group">
+            <label><span data-i18n="prompts.modal.content">Contenuto</span> <span class="text-dim text-sm" data-i18n="prompts.modal.content_hint">(usa &#123;&#123;variabile&#125;&#125; per i placeholder)</span></label>
+            <textarea id="promptContent" data-i18n="prompts.modal.content_placeholder" placeholder="Scrivi il prompt..."></textarea>
+        </div>
+        <div class="form-group">
+            <label><span data-i18n="prompts.modal.tags">Tag</span> <span class="text-dim text-sm" data-i18n="prompts.modal.tags_hint">(separati da virgola)</span></label>
+            <input id="promptTags" data-i18n="prompts.modal.tags_placeholder" placeholder="es. coding, review, python">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" onclick="closePromptEditor()" data-i18n="common.cancel">Annulla</button>
+            <button class="btn btn-primary" onclick="savePrompt()" data-i18n="common.save">Salva</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let _prompts = [];
+    let _editId = null;
+
+    async function loadPrompts() {
+        try {
+            const r = await api('/api/prompts');
+            _prompts = r.prompts || [];
+            renderPrompts();
+        } catch(e) {
+            document.getElementById('promptsGrid').innerHTML = '<div class="error">' + __('common.error') + ': ' + e.message + '</div>';
+        }
+    }
+
+    function renderPrompts() {
+        const grid = document.getElementById('promptsGrid');
+        const empty = document.getElementById('emptyPrompts');
+        if (!_prompts.length) {
+            grid.innerHTML = '';
+            empty.style.display = 'block';
+            return;
+        }
+        empty.style.display = 'none';
+        grid.innerHTML = _prompts.map(p => {
+            const vars = (p.variables || (p.content.match(/\{\{(\w+)\}\}/g) || [])).map(function(v) { return v.replace(/[{}]/g, ''); });
+            const tags = p.tags || [];
+            const preview = p.content.slice(0, 200);
+            const varChips = vars.map(function(v) { return '<span class="var-chip">' + v + '</span>'; }).join('');
+            const tagChips = tags.map(function(t) { return '<span class="p-tag">' + escHtml(t) + '</span>'; }).join('');
+            return '<div class="prompt-card" onclick="editPrompt(\'' + p.id + '\')">' +
+                '<h4>' + escHtml(p.name) + '</h4>' +
+                '<div class="p-preview">' + escHtml(preview) + (p.content.length > 200 ? '...' : '') + '</div>' +
+                '<div class="p-meta">' +
+                tagChips + varChips +
+                '<span>' + __('prompts.card.chars', {n: p.content.length}) + '</span>' +
+                '<span>' + (p.updated || p.created || '') + '</span>' +
+                '</div>' +
+                '<div class="p-actions">' +
+                '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();usePrompt(\'' + p.id + '\')">' + __('prompts.card.use') + '</button>' +
+                '<button class="btn btn-sm" onclick="event.stopPropagation();editPrompt(\'' + p.id + '\')">' + __('prompts.card.edit') + '</button>' +
+                '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deletePrompt(\'' + p.id + '\')">' + __('prompts.card.delete') + '</button>' +
+                '</div></div>';
+        }).join('');
+    }
+
+    function showPromptEditor() {
+        _editId = null;
+        document.getElementById('promptModalTitle').textContent = __('prompts.modal.title_new');
+        document.getElementById('promptName').value = '';
+        document.getElementById('promptContent').value = '';
+        document.getElementById('promptTags').value = '';
+        document.getElementById('promptModal').classList.add('open');
+    }
+
+    function closePromptEditor() {
+        document.getElementById('promptModal').classList.remove('open');
+    }
+
+    function editPrompt(id) {
+        const p = _prompts.find(x => x.id === id);
+        if (!p) return;
+        _editId = id;
+        document.getElementById('promptModalTitle').textContent = __('prompts.modal.title_edit', {name: p.name});
+        document.getElementById('promptName').value = p.name;
+        document.getElementById('promptContent').value = p.content;
+        document.getElementById('promptTags').value = (p.tags || []).join(', ');
+        document.getElementById('promptModal').classList.add('open');
+    }
+
+    async function savePrompt() {
+        const name = document.getElementById('promptName').value.trim();
+        const content = document.getElementById('promptContent').value.trim();
+        const tagsStr = document.getElementById('promptTags').value.trim();
+        if (!name || !content) { toast(__('prompts.toast.validation'), 'error'); return; }
+        const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+        try {
+            if (_editId) {
+                await api('/api/prompts/' + _editId, {
+                    method: 'PUT',
+                    body: JSON.stringify({ name, content, tags, variables: [] }),
+                });
+                toast(__('prompts.toast.updated'), 'success');
+            } else {
+                await api('/api/prompts', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, content, tags, variables: [] }),
+                });
+                toast(__('prompts.toast.created'), 'success');
+            }
+            closePromptEditor();
+            loadPrompts();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    async function deletePrompt(id) {
+        if (!confirm(__('prompts.delete.confirm'))) return;
+        try {
+            await api('/api/prompts/' + id, { method: 'DELETE' });
+            toast(__('prompts.delete.deleted'), 'success');
+            loadPrompts();
+        } catch(e) {
+            toast(__('common.error') + ': ' + e.message, 'error');
+        }
+    }
+
+    function usePrompt(id) {
+        const p = _prompts.find(x => x.id === id);
+        if (!p) return;
+        // Navigate to chat page with the prompt pre-filled
+        sessionStorage.setItem('prefillPrompt', JSON.stringify({ name: p.name, content: p.content }));
+        window.location.href = '/chat';
+    }
+
+    loadPrompts();
+</script>
+{% endblock %}

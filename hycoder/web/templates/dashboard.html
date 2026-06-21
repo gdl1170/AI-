@@ -1,0 +1,145 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}<span data-i18n="page.title.dashboard">📊 Dashboard</span>{% endblock %}
+{% block content %}
+<style>
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; }
+    .stat-card .val { font-size: 1.8rem; font-weight: 700; }
+    .stat-card .lbl { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+    .stat-card .sub { font-size: 0.8rem; color: var(--text-dim); margin-top: 2px; }
+    .stat-card.green .val { color: var(--green); }
+    .stat-card.blue .val { color: var(--blue); }
+    .stat-card.purple .val { color: var(--purple); }
+    .stat-card.orange .val { color: var(--orange); }
+    .stat-card.yellow .val { color: var(--yellow); }
+    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+    .progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--blue)); border-radius: 3px; transition: width 0.5s ease; }
+    .history-item { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .history-item:last-child { border: none; }
+    .hi-prompt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+    .hi-meta { text-align: right; white-space: nowrap; font-size: 0.75rem; color: var(--text-dim); }
+    .reset-area { text-align: right; margin-bottom: 16px; }
+</style>
+
+<div class="grid-4" id="statsGrid">
+    <div class="stat-card green">
+        <div class="val" id="localTokens">0</div>
+        <div class="lbl" data-i18n="dashboard.local_tokens">Token Locali</div>
+        <div class="sub" id="localCalls">0 chiamate</div>
+    </div>
+    <div class="stat-card blue">
+        <div class="val" id="onlineTokens">0</div>
+        <div class="lbl" data-i18n="dashboard.online_tokens">Token Online</div>
+        <div class="sub" id="onlineCalls">0 chiamate</div>
+    </div>
+    <div class="stat-card purple">
+        <div class="val" id="totalTokens">0</div>
+        <div class="lbl" data-i18n="dashboard.total_tokens">Token Totali</div>
+        <div class="sub" id="totalCalls">0 chiamate</div>
+    </div>
+    <div class="stat-card orange">
+        <div class="val" id="totalTime">0s</div>
+        <div class="lbl" data-i18n="dashboard.total_time">Tempo Totale</div>
+        <div class="sub">locale <span id="timeLocal">0s</span> · online <span id="timeOnline">0s</span></div>
+    </div>
+    <div class="stat-card yellow">
+        <div class="val" id="progressPct">0%</div>
+        <div class="lbl" data-i18n="dashboard.progress">Completamento</div>
+        <div class="sub" id="progressEstimate">0h stimate</div>
+        <div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+    <div class="stat-card" style="border-color:var(--blue)">
+        <div class="val" id="sessionTime">0s</div>
+        <div class="lbl" data-i18n="dashboard.session_duration">Durata Sessione</div>
+        <div class="sub" id="cacheCount">0 cache hits</div>
+    </div>
+    <div class="stat-card" style="border-color:var(--orange)">
+        <div class="val" id="resMemory">0MB</div>
+        <div class="lbl" data-i18n="dashboard.memory">Memoria Processo</div>
+        <div class="sub" id="resCache">0 cache · 0MB disco</div>
+    </div>
+    <div class="stat-card" style="border-color:var(--accent)">
+        <div class="val" id="resCpu">0%</div>
+        <div class="lbl" data-i18n="dashboard.cpu">CPU</div>
+        <div class="sub" id="resUptime">0s uptime</div>
+    </div>
+</div>
+
+<div class="reset-area">
+    <button class="btn btn-sm btn-danger" onclick="resetStats()" data-i18n="dashboard.reset">⟳ Resetta statistiche</button>
+</div>
+
+<div class="card">
+    <h3 data-i18n="dashboard.recent_activity">Ultime attività</h3>
+    <div id="historyList">
+        <div class="text-dim" style="text-align:center;padding:20px">Nessuna attività ancora.</div>
+    </div>
+</div>
+
+<script>
+    async function loadStats() {
+        try {
+            const s = await api('/api/stats');
+            document.getElementById('localTokens').textContent = (s.local.tokens_total || 0).toLocaleString();
+            document.getElementById('onlineTokens').textContent = (s.online.tokens_total || 0).toLocaleString();
+            document.getElementById('totalTokens').textContent = (s.total.tokens_total || 0).toLocaleString();
+            document.getElementById('localCalls').textContent = (s.local.calls || 0) + ' ' + __('dashboard.calls');
+            document.getElementById('onlineCalls').textContent = (s.online.calls || 0) + ' ' + __('dashboard.calls');
+            document.getElementById('totalCalls').textContent = (s.total.calls || 0) + ' ' + __('dashboard.calls');
+            document.getElementById('totalTime').textContent = fmtTime(s.total.time_s || 0);
+            document.getElementById('timeLocal').textContent = fmtTime(s.local.time_s || 0);
+            document.getElementById('timeOnline').textContent = fmtTime(s.online.time_s || 0);
+            document.getElementById('progressPct').textContent = (s.progress_pct || 0) + '%';
+            document.getElementById('progressEstimate').textContent = (s.total_estimate_s || 0).toFixed(0) + 's ' + __('dashboard.estimated');
+            document.getElementById('progressFill').style.width = (s.progress_pct || 0) + '%';
+            document.getElementById('sessionTime').textContent = fmtTime(s.session_duration_s || 0);
+        } catch(e) {}
+        try {
+            const r = await api('/api/system/resources');
+            document.getElementById('resMemory').textContent = (r.process_memory_mb || 0).toFixed(1) + 'MB';
+            document.getElementById('resCpu').textContent = (r.cpu_percent || 0).toFixed(1) + '%';
+            document.getElementById('resUptime').textContent = fmtTime(r.uptime_s || 0);
+            document.getElementById('resCache').textContent = (r.limits?.cache_entries || 0) + ' ' + __('dashboard.cache') + ' · ' + (r.limits?.cache_disk_mb || 0).toFixed(1) + 'MB ' + __('dashboard.disk');
+        } catch(e) {}
+    }
+
+    async function loadHistory() {
+        try {
+            const h = await api('/api/stats/history');
+            const el = document.getElementById('historyList');
+            if (!h.length) {
+                el.innerHTML = '<div class="text-dim" style="text-align:center;padding:20px">' + __('dashboard.no_activity') + '</div>';
+                return;
+            }
+            el.innerHTML = h.slice(-20).reverse().map(e => `
+                <div class="history-item">
+                    <div class="hi-prompt">${esc(e.prompt || '')}</div>
+                    <div class="hi-meta">
+                        <span class="badge ${e.source === 'online' ? 'badge-blue' : 'badge-green'}">${e.source.toUpperCase()}</span>
+                        ${e.tokens_total} tok · ${e.time_s}s${e.cached ? ' <span class="text-dim">⚡</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        } catch(e) {}
+    }
+
+    async function resetStats() {
+        if (!confirm(__('dashboard.reset_confirm'))) return;
+        await api('/api/stats/reset', { method: 'POST' });
+        toast(__('dashboard.reset_done'), 'success');
+        loadStats(); loadHistory();
+    }
+
+    function fmtTime(s) {
+        if (s < 60) return s.toFixed(1) + 's';
+        if (s < 3600) return (s/60).toFixed(1) + 'm';
+        return (s/3600).toFixed(2) + 'h';
+    }
+
+    function esc(s) { return s.replace(/[&<>"]/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
+
+    loadStats(); loadHistory();
+    setInterval(loadStats, 3000);
+    setInterval(loadHistory, 5000);
+</script>
+{% endblock %}

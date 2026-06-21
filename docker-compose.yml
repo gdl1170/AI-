@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  ai-plus:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      HYBRID_PORT: "5000"
+    volumes:
+      - ~/.config/hybrid-coder:/root/.config/hybrid-coder
+      - ~/.opencode:/root/.opencode
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
