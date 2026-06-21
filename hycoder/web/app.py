@@ -3810,11 +3810,19 @@ Formatta la risposta in Markdown con sezioni chiare.
             log_msg(f"Push URL: {masked_url}")
             log_msg(f"Branch: {branch}")
 
+            # Try push first, fall back to force push if rejected
             r = subprocess.run(
                 ["git", "-C", str(p), "push", "-u", push_url, branch],
                 capture_output=True, text=True, timeout=120,
                 env=git_env,
             )
+            if r.returncode != 0 and "rejected" in (r.stderr or ""):
+                log_msg("⚠ Push rifiutato — remote ha commit non presenti in locale, tento force push...")
+                r = subprocess.run(
+                    ["git", "-C", str(p), "push", "--force-with-lease", "-u", push_url, branch],
+                    capture_output=True, text=True, timeout=120,
+                    env=git_env,
+                )
             if r.returncode != 0:
                 err = r.stderr.strip() or r.stdout.strip()
                 log_msg(f"❌ Push fallito (exit {r.returncode}): {err[:500]}")
