@@ -3792,10 +3792,11 @@ Formatta la risposta in Markdown con sezioni chiare.
 
             # 7. Push
             log_msg("⬆ Push su GitHub...")
-            # Prevent git from hanging on auth prompts
+            # Prevent git/ssh from hanging on auth prompts or host key prompts
             git_env = {**os.environ,
                        "GIT_TERMINAL_PROMPT": "0",
-                       "GIT_ASKPASS": "echo"}
+                       "GIT_ASKPASS": "echo",
+                       "GIT_SSH_COMMAND": "ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"}
             push_url = repo_url
             masked_url = repo_url
             if token and repo_url.startswith("https://"):
@@ -3836,7 +3837,13 @@ Formatta la risposta in Markdown con sezioni chiare.
                     hint = " — Permesso negato. Per SSH verifica la chiave pubblica, per HTTPS usa un token."
                 elif "could not read Username" in err or "could not read Password" in err:
                     hint = " — Git sta chiedendo credenziali interattive. Per HTTPS usa un Personal Access Token."
-                elif "timeout" in err.lower() or "timed out" in err.lower():
+                elif "Host key verification failed" in err:
+                    hint = " — Chiave host SSH non riconosciuta. Se usi SSH, verifica l'host in ~/.ssh/known_hosts."
+                elif "Permission denied (publickey)" in err:
+                    hint = " — Chiave SSH non accettata. Aggiungi la chiave pubblica a GitHub e caricala in ssh-agent."
+                elif "Could not resolve hostname" in err:
+                    hint = " — Hostname irraggiungibile. Verifica l'URL e la connessione."
+                elif "timeout" in err.lower() or "timed out" in err.lower() or "Connection timed out" in err:
                     hint = " — Timeout di rete. Verifica la connessione a github.com."
                 log_msg(hint.strip() if hint else "")
                 return jsonify({"error": f"Push fallito: {err[:300]}{hint}", "log": "\n".join(log_lines)}), 400
